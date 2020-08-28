@@ -115,7 +115,7 @@ int appState = 1;
 /** spousteno Taskerem jedenkrat za minutu */
 void doComputeMinData()
 {
-    vals.resetMinuteData(); 
+  vals.resetMinuteData(); 
 }
 
 /** spousteno z loopu cca kazdych 10 msec */
