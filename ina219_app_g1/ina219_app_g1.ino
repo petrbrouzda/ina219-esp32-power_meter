@@ -210,14 +210,14 @@ void definujMenu()
   hlavniMenu = new Menu( "Hlavni menu" );
   hlavniMenu->addItem( "Spustit mereni", 100 );
   hlavniMenu->addItem( "Merim: Spotrebic", 10 );
-  hlavniMenu->addItem( "Rozliseni: 32V 2A", 20 );
+  hlavniMenu->addItem( "Rozsah: 32V 2A", 20 );
   hlavniMenu->addItem( "Vymazat pocitadla", 101 );
 
   coMerimMenu = new Menu( "Co merim" );
   coMerimMenu->addItem( "Spotrebic", 11 );
   coMerimMenu->addItem( "Zdroj", 12 );
   
-  rozliseniMenu = new Menu( "Rozliseni" );
+  rozliseniMenu = new Menu( "Rozsah" );
   rozliseniMenu->addItem( "32 V / 2 A", 21 );
   rozliseniMenu->addItem( "32 V / 1 A", 22 );
   rozliseniMenu->addItem( "16 V / 400 mA", 23 );
@@ -354,15 +354,15 @@ void appStateRozliseniMenu()
       rozliseni = i;
       switch( rozliseni ) {
         case 21: 
-            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozliseni: 32V 2A" ); 
+            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozsah: 32V 2A" ); 
             ina219.setCalibration_32V_2A();
             break;
         case 22: 
-            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozliseni: 32V 1A" ); 
+            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozsah: 32V 1A" ); 
             ina219.setCalibration_32V_1A();
             break;
         case 23: 
-            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozliseni: 16V 0.4A" ); 
+            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozsah: 16V 0.4A" ); 
             ina219.setCalibration_16V_400mA();
             break;
       } // switch( rozliseni )
