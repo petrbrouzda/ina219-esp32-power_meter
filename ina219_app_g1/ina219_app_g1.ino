@@ -245,7 +245,6 @@ void setup() {
 
   // nastavim nejvetsi povoleny range, abychom nebyli prekvapeni
   ina219.setCalibration_32V_2A();
-  rozliseni = 21;
 
   pinMode( KEY_RIGHT, INPUT_PULLUP );
   attachInterrupt(buttonR.pin, isrButtonR, CHANGE);
