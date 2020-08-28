@@ -19,15 +19,15 @@
  */
 
 void tftPrint( int color, int textSize,
-            int pos_x,
-            int pos_y_malych_napisu, int pos_y_velkych_napisu,
-            char * buff )
+        int pos_x,
+        int pos_y_malych_napisu, int pos_y_velkych_napisu,
+        char * buff )
 {
-    tft.setTextColor(color, TFT_BLACK);
-    tft.setTextSize(textSize);
-    int pos_y = pos_y_malych_napisu*NAPIS_MALY_VYSKA + pos_y_velkych_napisu*NAPIS_VELKY_VYSKA;
-    tft.setCursor( pos_x, pos_y );
-    tft.print( buff );
+        tft.setTextColor(color, TFT_BLACK);
+        tft.setTextSize(textSize);
+        int pos_y = pos_y_malych_napisu*NAPIS_MALY_VYSKA + pos_y_velkych_napisu*NAPIS_VELKY_VYSKA;
+        tft.setCursor( pos_x, pos_y );
+        tft.print( buff );
 }
 
 
@@ -236,7 +236,7 @@ void print_page2_half1()
 
 void print_page2_half2()
 {
-  tftPrint( TFT_WHITE, 1,
+    tftPrint( TFT_WHITE, 1,
             X_COL_2,
             1, 1,
             (char*)"min voltage (total):" );

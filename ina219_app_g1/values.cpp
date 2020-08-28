@@ -27,8 +27,6 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime )
   this->total_uAh += capa_uAh;
 
   this->meteringTime += interval_ms;
-
-  
   
   if( this->current_mA > this->maxCurrentMin ) {
     this->maxCurrentMin = this->current_mA;
@@ -36,7 +34,6 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime )
   if( this->current_mA > this->maxCurrentTotal ) {
     this->maxCurrentTotal = this->current_mA;
   }
-
   if( this->outVoltage > this->maxVoltageTotal ) {
     this->maxVoltageTotal = this->outVoltage;
   }
@@ -53,21 +50,21 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime )
 
 void Values::resetCounters()
 {
-    this->total_uWh = 0;
-    this->total_ms = 0;
-    this->total_uAh = 0;    
-    this->maxCurrentMin = 0;
-    this->maxCurrentTotal = 0;
-    this->meteringTime = 0;
-    this->minVoltageTotal = 100;
-    this->maxVoltageTotal = -100;
-    this->minVoltageMin = 100;
-    this->maxVoltageMin = -100;
+  this->total_uWh = 0;
+  this->total_ms = 0;
+  this->total_uAh = 0;    
+  this->maxCurrentMin = 0;
+  this->maxCurrentTotal = 0;
+  this->meteringTime = 0;
+  this->minVoltageTotal = 100;
+  this->maxVoltageTotal = -100;
+  this->minVoltageMin = 100;
+  this->maxVoltageMin = -100;
 }
 
 void Values::resetMinuteData()
 {
-    this->maxCurrentMin = this->current_mA;
-    this->minVoltageMin = this->outVoltage;
-    this->maxVoltageMin = this->outVoltage;
+  this->maxCurrentMin = this->current_mA;
+  this->minVoltageMin = this->outVoltage;
+  this->maxVoltageMin = this->outVoltage;
 }

@@ -15,9 +15,13 @@ class Menu
     void setActive( int code );
     void clearState();
     int getResult();
+
     char items[MAX_MENU_ITEMS][MAX_ITEM_LEN];
     int codes[MAX_MENU_ITEMS];
+    
+    /** aktualni pozice kurzoru */
     int curPos;
+    /** pocet polozek */
     int ct; 
     
     /**
@@ -26,7 +30,11 @@ class Menu
      * >0 - zvoleny code
      */
     int state;
+
+    /** true = prekreslit obrazovku */
     bool redraw;
+
+    /** minule zvolena polozka */
     int active;
 };
 

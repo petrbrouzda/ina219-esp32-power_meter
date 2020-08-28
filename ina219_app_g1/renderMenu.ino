@@ -1,5 +1,9 @@
 #include "Menu.h"
 
+
+
+
+
 #define MENU_FONT 4
 #define MENU_VELIKOST_RADKU 26
 #define DISPLAY_RADKU 4
@@ -7,6 +11,9 @@
 #define RADEK_X 15
 #define ZNACKA_X 2
 
+/**
+ * Vykresleni menu
+ */ 
 void renderMenu()
 {
   if( currentMenu==NULL ) return;
@@ -60,25 +67,27 @@ void renderMenu()
         int activeRow = i + od;
         if( activeRow==currentMenu->ct ) break;
         
+        // pridame k textu z obou stran mezery, aby byla oznacena polozka oznacena hezky
         char buffer[100];
         sprintf( buffer, " %s ", 
             currentMenu->items[activeRow] 
             );
 
-        if( currentMenu->state == currentMenu->codes[activeRow] ) {
-          tft.setTextColor(TFT_RED, TFT_YELLOW);
-        } else  if( currentMenu->curPos == activeRow ) {
-          tft.setTextColor(TFT_BLACK, TFT_WHITE);
-        } else {
-          tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        if( currentMenu->state == currentMenu->codes[activeRow] ) { 
+          tft.setTextColor(TFT_RED, TFT_YELLOW);    // barva ZVOLENE polozky (pri kliknuti VPRAVO)
+        } else  if( currentMenu->curPos == activeRow ) {    
+          tft.setTextColor(TFT_BLACK, TFT_WHITE);   // barva oznacene polozky (kde je kurzor)    
+        } else {                                            
+          tft.setTextColor(TFT_GREEN, TFT_BLACK);   // bezna polozka
         }
         if( currentMenu->active==currentMenu->codes[activeRow] ) {
-            tft.drawString(">", ZNACKA_X, MENU_VELIKOST_RADKU + i*MENU_VELIKOST_RADKU, MENU_FONT );
+          // pro PREDVOLENOU (drive aktivni) polozku se pred ni ukaze znacka ">"
+          tft.drawString(">", ZNACKA_X, MENU_VELIKOST_RADKU + i*MENU_VELIKOST_RADKU, MENU_FONT );
         }
         tft.drawString(buffer, RADEK_X, MENU_VELIKOST_RADKU + i*MENU_VELIKOST_RADKU, MENU_FONT );
-    }
+    } // for( int i = 0; i < DISPLAY_RADKU; i++ )
 
     currentMenu->redraw = false;
-  }
+  } // if( currentMenu->redraw )
 
 }

@@ -194,8 +194,14 @@ Menu * hlavniMenu;
 Menu * coMerimMenu;
 Menu * rozliseniMenu;
 
+
+// pozice polozek v menu
+#define HLAVNI_MENU_COMERIM 1
+#define HLAVNI_MENU_ROZLISENI 2
+
+
 /**
- * volano ze setup. inicializace menu.
+ * volano ze setup() - inicializace menu.
  */
 void definujMenu()
 {
@@ -217,8 +223,11 @@ void definujMenu()
 
 
 
-
 void setup() {
+
+  tft.init();
+  printMsg( TFT_WHITE, "Meric spotreby 1.0", "... startuji ..." );
+
   // Open serial communications and wait for port to open:
   Serial.begin(115200);
   while (!Serial) {
@@ -226,10 +235,11 @@ void setup() {
   }
 
   if (! ina219.begin()) {
-    Serial.println("Failed to find INA219 chip");
+    printMsg( TFT_RED, "CHYBA", "Nevidim INA219." );
     while (1) { delay(10); }
   }
 
+  // nastavim nejvetsi povoleny range, abychom nebyli prekvapeni
   ina219.setCalibration_32V_2A();
   rozliseni = 21;
 
@@ -245,10 +255,9 @@ void setup() {
   pinMode( KEY_UP, INPUT_PULLUP );
   attachInterrupt(buttonU.pin, isrButtonU, CHANGE);
   
-  // pinMode( CORE_BUTTON_TOP, INPUT_PULLUP );
-  // pinMode( CORE_BUTTON_DOWN, INPUT_PULLUP );
-
-  tft.init();
+  // Dve tlacitka, co jsou primo na boardu. Ale ted pro ne nemam pouziti.
+    // pinMode( CORE_BUTTON_TOP, INPUT_PULLUP );
+    // pinMode( CORE_BUTTON_DOWN, INPUT_PULLUP );
 
   definujMenu();
   currentMenu = hlavniMenu;
@@ -272,30 +281,39 @@ void appStateMainMenu()
     
     appState = i;
     if( i==10 ) {
-       currentMenu = coMerimMenu;
-       coMerimMenu->clearState();
-       coMerimMenu->setActive( coMerim );
-       delay( MENU_CHANGE_DELAY );
+      
+      currentMenu = coMerimMenu;
+      coMerimMenu->clearState();
+      coMerimMenu->setActive( coMerim );
+      delay( MENU_CHANGE_DELAY );
+
     } else if( i==20 ) {
-       currentMenu = rozliseniMenu;
-       rozliseniMenu->clearState();
-       rozliseniMenu->setActive( rozliseni );
-       delay( MENU_CHANGE_DELAY );
+      
+      currentMenu = rozliseniMenu;
+      rozliseniMenu->clearState();
+      rozliseniMenu->setActive( rozliseni );
+      delay( MENU_CHANGE_DELAY );
+
     } else if( i==100 ) {
-        // spoustim mereni
-        displayedPage = 1;
-        vals.lastMeteringTime = millis() - 1;
-        doMeter();
-        doPrint();
-        tasker.setInterval( doPrint, METERING_DISPLAY_REFRESH );
-        tasker.setInterval( doComputeMinData, 60000 );
+      
+      // spoustim mereni
+      displayedPage = 1;
+      vals.lastMeteringTime = millis() - 1;
+      // rovnou to zmerime a zobrazime na obrazovce, aby uzivatel necekal 1.5 sec na reakci
+      doMeter();
+      doPrint();
+      tasker.setInterval( doPrint, METERING_DISPLAY_REFRESH );
+      tasker.setInterval( doComputeMinData, 60000 );
+
     } else if( i==101 ) {
-        // smazat pocitadla a zpet do menu
-        appState = 1;
-        hlavniMenu->clearState();
-        hlavniMenu->setPos(0);
-        vals.resetCounters();
-        delay( MENU_CHANGE_DELAY );
+      
+      // smazat pocitadla a zpet do menu
+      appState = 1;
+      hlavniMenu->clearState();
+      hlavniMenu->setPos(0);
+      vals.resetCounters();
+      delay( MENU_CHANGE_DELAY );
+
     }
   } // doslo k volbe!
 }
@@ -306,17 +324,19 @@ void appStateCoMerimMenu()
   int i = coMerimMenu->getResult();
   if( i!=0 ) {
     // doslo k volbe!
+    
     if( i>0 ) {
       coMerim = i;
       switch( coMerim ) {
-        case 11: hlavniMenu->updateText( 1, "Merim: Spotrebic" ); break;
-        case 12: hlavniMenu->updateText( 1, "Merim: Zdroj" ); break;
+        case 11: hlavniMenu->updateText( HLAVNI_MENU_COMERIM, "Merim: Spotrebic" ); break;
+        case 12: hlavniMenu->updateText( HLAVNI_MENU_COMERIM, "Merim: Zdroj" ); break;
       }
-    }
+    } // if( i>0 ) 
+
     // navrat do hlavniho menu 
     appState = 1;
     currentMenu = hlavniMenu;
-    hlavniMenu->setPos( 1 );
+    hlavniMenu->setPos( HLAVNI_MENU_COMERIM );
     hlavniMenu->clearState();
     delay( MENU_CHANGE_DELAY );
   } // doslo k volbe!  
@@ -327,27 +347,29 @@ void appStateRozliseniMenu()
   int i = rozliseniMenu->getResult();
   if( i!=0 ) {
     // doslo k volbe!
+
     if( i>0 ) {
       rozliseni = i;
       switch( rozliseni ) {
         case 21: 
-            hlavniMenu->updateText( 2, "Rozliseni: 32V 2A" ); 
+            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozliseni: 32V 2A" ); 
             ina219.setCalibration_32V_2A();
             break;
         case 22: 
-            hlavniMenu->updateText( 2, "Rozliseni: 32V 1A" ); 
+            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozliseni: 32V 1A" ); 
             ina219.setCalibration_32V_1A();
             break;
         case 23: 
-            hlavniMenu->updateText( 2, "Rozliseni: 16V 0.4A" ); 
+            hlavniMenu->updateText( HLAVNI_MENU_ROZLISENI, "Rozliseni: 16V 0.4A" ); 
             ina219.setCalibration_16V_400mA();
             break;
-      }
-    }
+      } // switch( rozliseni )
+    } // if( i>0 ) 
+
     // navrat do hlavniho menu 
     appState = 1;
     currentMenu = hlavniMenu;
-    hlavniMenu->setPos( 2 );
+    hlavniMenu->setPos( HLAVNI_MENU_ROZLISENI );
     hlavniMenu->clearState();
     delay( MENU_CHANGE_DELAY );
   } // doslo k volbe!  
@@ -374,23 +396,29 @@ void appStateMereni()
     while( keyAvail() ) {
       char ch = getKey();
       if( ch=='l' ) {
+
           // zmacknuto ZPET, konec mereni, zastaveni periodickych tasku
          appState = 1;
          hlavniMenu->clearState();
          tasker.setInterval( doComputeMinData, 0 );
          tasker.setInterval( doPrint, 0 );
+
       } else if( ch=='u' ) {
+        
         displayedPage--;
         if( displayedPage<DISPLAY_PAGE_MIN ) displayedPage=DISPLAY_PAGE_MAX;
         // hned prekreslime, aby to bylo plynule
         doPrint();
+
       } else if( ch=='d' ) {
+        
         displayedPage++;
         if( displayedPage>DISPLAY_PAGE_MAX ) displayedPage=DISPLAY_PAGE_MIN;
         // hned prekreslime, aby to bylo plynule
         doPrint();
+
       }
-    }
+    } // while( keyAvail() )
 
    // mereni
    doMeter();
