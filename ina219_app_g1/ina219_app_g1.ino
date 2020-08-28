@@ -21,6 +21,8 @@
   // https://diyi0t.com/ina219-tutorial-for-arduino-and-esp/
   // https://github.com/adafruit/Adafruit_INA219/blob/master/Adafruit_INA219.cpp
   // https://github.com/adafruit/Adafruit_INA219/blob/master/Adafruit_INA219.h
+
+  // datasheet: https://www.ti.com/lit/ds/symlink/ina219.pdf
   
   Adafruit_INA219 ina219;
 // --- INA219 ---
@@ -93,7 +95,7 @@ int rozliseni = 21;
 /** namerene hodnoty */
 Values vals;
 
-/** Zobrazovane stranky:
+/** Zobrazovane stranky v rezimu mereni:
  * - 1 = vsechny meraky
  * - 2 = historie napeti
  */
@@ -105,7 +107,7 @@ Menu * currentMenu;
 /**
  * Aktualni rezim prace aplikace:
  * 1 = hlavniMenu
- * 10 = coMeriMenu
+ * 10 = coMerimMenu
  * 20 = rozliseniMenu
  * 100 = mereni
  */
