@@ -2,8 +2,10 @@
 
 /**
  * Meric spotreby pro 
- * - ESP32 s OLED displejem LiLigo TTGO T-Display
- * - merici modul INA-219.
+ * - ESP32 s OLED displejem LilyGO TTGO T-Display 
+ *      - https://www.banggood.com/TTGO-T-Display-ESP32-CP2104-WiFi-bluetooth-Module-1_14-Inch-LCD-Development-Board-LILYGO-for-Arduino-products-that-work-with-official-Arduino-boards-p-1522925.html?p=FY1402881924201411VQ&zf=881924
+ * - merici modul INA-219. 
+ *      - https://www.banggood.com/GY-INA219-High-Precision-I2C-Digital-Current-Sensor-Module-p-1200612.html?p=FY1402881924201411VQ&zf=881924
  * 
  * Vyzaduje knihovny v library manageru:
  * - TFT_eSPI 2.2.14 (s upravou User_Config dle https://github.com/Xinyuan-LilyGO/TTGO-T-Display ! ) 
