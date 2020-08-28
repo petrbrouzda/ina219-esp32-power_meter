@@ -269,12 +269,12 @@ void print_page_footer()
       tftPrint( TFT_GREEN, 1,
             X_COL_1,
             4, 4,
-            (char*)"[spotrebic]" );
+            (char*)"[source]" );
     } else {
       tftPrint( TFT_YELLOW, 1,
             X_COL_1,
             4, 4,
-            (char*)"[zdroj]" );
+            (char*)"[load]" );
     }
 
     if( rozliseni==21 ) {
