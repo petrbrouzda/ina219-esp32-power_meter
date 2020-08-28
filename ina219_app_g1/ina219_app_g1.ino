@@ -1,8 +1,9 @@
 #include "Wire.h"
 
 /**
- * Meric spotreby pro ESP32 s OLED displejem LiLigo TTGO T-Display
- * a merici modul INA-219.
+ * Meric spotreby pro 
+ * - ESP32 s OLED displejem LiLigo TTGO T-Display
+ * - merici modul INA-219.
  * 
  * Vyzaduje knihovny v library manageru:
  * - TFT_eSPI 2.2.14 (s upravou User_Config dle https://github.com/Xinyuan-LilyGO/TTGO-T-Display ! ) 
@@ -207,7 +208,6 @@ void definujMenu()
   coMerimMenu = new Menu( "Co merim" );
   coMerimMenu->addItem( "Spotrebic", 11 );
   coMerimMenu->addItem( "Zdroj", 12 );
-  coMerimMenu->setActive( coMerim );
   
   rozliseniMenu = new Menu( "Rozliseni" );
   rozliseniMenu->addItem( "32 V / 2 A", 21 );
