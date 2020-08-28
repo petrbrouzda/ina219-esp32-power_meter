@@ -9,6 +9,8 @@
  * - TFT_eSPI 2.2.14 (s upravou User_Config dle https://github.com/Xinyuan-LilyGO/TTGO-T-Display ! ) 
  * - Tasker 2.0.0 
  * - Adafruit_INA219 1.0.9
+ * 
+ * Kompilovano s ESP32 arduino core 1.0.4.
  */ 
 
 // +++ INA229 +++
