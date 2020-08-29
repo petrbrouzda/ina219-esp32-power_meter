@@ -46,19 +46,19 @@ char numBuffer[32];
 char * formatNumber( double number, const char * jednotkaBase, const char * jednotkaK )
 {
   if( number < 1.0 ) {
-    sprintf( numBuffer, "%.02f %s", number, jednotkaBase );   // do 1.0 je to 0.12 mWh
+    sprintf( numBuffer, "%.02f %s ", number, jednotkaBase );   // do 1.0 je to 0.12 mWh
   } else if( number < 10.0 ) {
-    sprintf( numBuffer, "%.02f %s", number, jednotkaBase );   // do 10.0 je to 1.23 mWh
+    sprintf( numBuffer, "%.02f %s ", number, jednotkaBase );   // do 10.0 je to 1.23 mWh
   } else if( number < 100.0 ) {
-    sprintf( numBuffer, "%.01f %s", number, jednotkaBase );   // do 100.0 je to 12.3 mWh
+    sprintf( numBuffer, "%.01f %s ", number, jednotkaBase );   // do 100.0 je to 12.3 mWh
   } else if( number < 1000.0 ) {
-    sprintf( numBuffer, "%.0f %s", number, jednotkaBase ); // 100-1000 je 123 mWh
+    sprintf( numBuffer, "%.0f %s ", number, jednotkaBase ); // 100-1000 je 123 mWh
   } else if( number < 10000.0 ) {
-    sprintf( numBuffer, "%.02f %s", (number/1000.0), jednotkaK ); // 1 000-10 000 je 1.23 Wh
+    sprintf( numBuffer, "%.02f %s ", (number/1000.0), jednotkaK ); // 1 000-10 000 je 1.23 Wh
   } else if( number < 100000.0 ) { 
-    sprintf( numBuffer, "%.01f %s", (number/1000.0), jednotkaK ); // 10 000 - 100 000 je 12.3 Wh
+    sprintf( numBuffer, "%.01f %s ", (number/1000.0), jednotkaK ); // 10 000 - 100 000 je 12.3 Wh
   } else {
-    sprintf( numBuffer, "%.0f %s", number, jednotkaK ); // >100 000 je 123 Wh
+    sprintf( numBuffer, "%.0f %s ", (number/1000.0), jednotkaK ); // >100 000 je 123 Wh
   } 
   return numBuffer;
 }
@@ -72,9 +72,9 @@ void print_dumpValuesToSerial()
     Serial.printf( "load %.02f V  %.02f mW  %.02f %% \t", vals.busvoltage, vals.power_mW, (100.0-vals.shunt_pomer) ); 
     Serial.printf( "shunt %.02f mV  %.02f mW  %.02f %% \n", vals.shuntvoltage, vals.shunt_power_mW, vals.shunt_pomer); 
     Serial.printf( "    energy %f uWh per %d ms \t ", vals.energy_uWh, vals.interval_ms );
-    Serial.printf( "total %f mWh per %d s \t ", (vals.total_uWh/1000.0), vals.total_ms/1000 );
+    Serial.printf( "total %f mWh per %d s \t ", (getVal(vals.total_uWh)/1000.0), vals.total_ms/1000 );
     Serial.printf( "avg %f mW \t", vals.avg_power ); 
-    Serial.printf( "total %f mAh \t", (vals.total_uAh/1000.0) ); 
+    Serial.printf( "total %f mAh \t", (getCal(vals.total_uAh)/1000.0) ); 
     Serial.println("");
     // uz to 7 msec bezelo, znovu zmerime hodnoty
     doMeter();
@@ -131,7 +131,7 @@ void print_page1_half1()
     tftPrint( TFT_GREEN, 2,
             X_COL_1+X_OFF_NADPIS,
             4, 3,
-            formatNumber( (vals.total_uAh/1000.0), "mAh", "Ah" )
+            formatNumber( (getVal(vals.total_uAh)/1000.0), "mAh", "Ah" )
             );        
 }
 
@@ -236,15 +236,140 @@ void print_page2_half1()
 
 void print_page2_half2()
 {
+  
+  tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            0, 0,
+            (char*)"max current {min):" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            1, 0,
+            formatNumber( vals.maxCurrentMin, "mA", "A" )
+            );
+
+
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
             1, 1,
-            (char*)"min voltage (total):" );
+            (char*)"max current {total):" );
 
-    tftPrint( TFT_YELLOW, 2,
+    tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             2, 1,
-            formatNumber( vals.minVoltageTotal*1000.0, "mV", "V" )
+            formatNumber( vals.maxCurrentTotal, "mA", "A" )
+            );
+
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            2, 2,
+            (char*)"avg power:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            3, 2,
+            formatNumber( vals.avg_power, "mW", "W" )
+            );
+
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            3, 3,
+            (char*)"time:" );
+
+    char buff[32];
+    sprintf( buff, "%d s ", vals.meteringTime/1000 );
+          
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            4, 3,
+            buff );
+}
+
+
+
+void print_page3_half1()
+{
+    
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            0, 0,
+            (char*)"current limit:" );
+
+    tftPrint( TFT_WHITE, 2,
+            X_COL_1+X_OFF_NADPIS,
+            1, 0,
+            formatNumber( lowHighThreshold, "mA", "A" )
+            );
+
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            1, 1,
+            (char*)"low power time:" );
+
+    tftPrint( TFT_YELLOW, 2,
+            X_COL_1+X_OFF_NADPIS,
+            2, 1,
+            formatNumber( (float)(vals.lowPowerTime), "ms", "s" )
+            );
+
+
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            2, 2,
+            (char*)"low power capa:" );
+
+    tftPrint( TFT_YELLOW, 2,
+            X_COL_1+X_OFF_NADPIS,
+            3, 2,
+            formatNumber( getVal(vals.lowPower_uAh)/1000.0, "mAh", "Ah"  )
+            );    
+
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            3, 3,
+            (char*)"low power:" );
+
+    tftPrint( TFT_YELLOW, 2,
+            X_COL_1+X_OFF_NADPIS,
+            4, 3,
+            formatNumber( getVal(vals.lowPower_uWh)/1000.0, "mWh", "Wh"  )
+            ); 
+   
+}
+
+
+void print_page3_half2()
+{
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            0, 0,
+            (char*)"time:" );
+
+    char buff[32];
+    sprintf( buff, "%d s ", vals.meteringTime/1000 );
+          
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            1, 0,
+            buff );
+
+
+  
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            1, 1,
+            (char*)"hig power time:" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_2+X_OFF_NADPIS,
+            2, 1,
+            formatNumber( (float)(vals.highPowerTime), "ms", "s" )
             );
 
 
@@ -252,13 +377,24 @@ void print_page2_half2()
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
             2, 2,
-            (char*)"max voltage (total):" );
+            (char*)"high power capa:" );
 
     tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             3, 2,
-            formatNumber( vals.maxVoltageTotal*1000.0, "mV", "V"  )
+            formatNumber( getVal(vals.highPower_uAh)/1000.0, "mAh", "Ah"  )
             );  
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            3, 3,
+            (char*)"high power:" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_2+X_OFF_NADPIS,
+            4, 3,
+            formatNumber( getVal(vals.highPower_uWh)/1000.0, "mWh", "Wh"  )
+            );             
 }
 
 

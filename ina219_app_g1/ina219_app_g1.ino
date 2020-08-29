@@ -123,8 +123,19 @@ int appState = 1;
  */
 float lowHighThreshold = 5;
 
+/**
+ * Stranku s vysledky mereni je treba celou prekreslit (vcetne smazani pozadi)
+ */
+bool meteringPageChanged = true;
+
+
 // -------- vnitrni stavy aplikace ---------------
 
+
+void log( const char * fmt, float f, long long l1, long long l2 )
+{
+  Serial.printf( fmt, f, l1, l2 );
+}
 
 void setAppState( int newState ) {
   Serial.printf( "appState = %d\n", newState );
@@ -150,7 +161,7 @@ void doMeter()
   
   long interval_ms = curTime - vals.lastMeteringTime;
 
-  vals.doCompute( coMerim, interval_ms, curTime );
+  vals.doCompute( coMerim, interval_ms, curTime, lowHighThreshold );
 }
 
 
@@ -166,11 +177,14 @@ void doPrint()
   print_dumpValuesToSerial();
 
   //T/ long t2 = millis();
-  
-  // smazani obrazovky trva 14 msec
-  tft.setRotation(3);
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextDatum(TL_DATUM); // kresli se od top-left
+
+  if( meteringPageChanged ) {
+    // smazani obrazovky trva 14 msec
+    tft.setRotation(3);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextDatum(TL_DATUM); // kresli se od top-left 
+    meteringPageChanged = false;
+  }
   
   // tedy po 14 msec zmerime hodnoty
   doMeter();
@@ -190,6 +204,12 @@ void doPrint()
     print_page2_half1();
     doMeter();
     print_page2_half2();
+    
+  } else if( displayedPage==3 ) {
+    
+    print_page3_half1();
+    doMeter();
+    print_page3_half2();
     
   }
 
@@ -233,7 +253,7 @@ void definujMenu()
   hlavniMenu->addItem( "Spustit mereni", 100 );
   hlavniMenu->addItem( "Merim: Spotrebic", 10 );
   hlavniMenu->addItem( "Rozsah: 32V 2A", 20 );
-  hlavniMenu->addItem( "Low/high: 1 mA", 30 );
+  hlavniMenu->addItem( "Low/high: 5 mA", 30 );
   hlavniMenu->addItem( "Vymazat pocitadla", 101 );
 
   coMerimMenu = new Menu( "Co merim" );
@@ -499,7 +519,7 @@ void appStateMenu()
 
 
 #define DISPLAY_PAGE_MIN 1
-#define DISPLAY_PAGE_MAX 2
+#define DISPLAY_PAGE_MAX 3
 
 void appStateMereni()
 {
@@ -518,6 +538,7 @@ void appStateMereni()
         
         displayedPage--;
         if( displayedPage<DISPLAY_PAGE_MIN ) displayedPage=DISPLAY_PAGE_MAX;
+        meteringPageChanged = true;
         // hned prekreslime, aby to bylo plynule
         doPrint();
 
@@ -525,6 +546,7 @@ void appStateMereni()
         
         displayedPage++;
         if( displayedPage>DISPLAY_PAGE_MAX ) displayedPage=DISPLAY_PAGE_MIN;
+        meteringPageChanged = true;
         // hned prekreslime, aby to bylo plynule
         doPrint();
 
