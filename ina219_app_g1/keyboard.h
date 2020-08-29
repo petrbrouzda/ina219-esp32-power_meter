@@ -13,4 +13,7 @@ void IRAM_ATTR isrButtonL();
 void IRAM_ATTR isrButtonU();
 void IRAM_ATTR isrButtonD();
 
+bool keyAvail();
+char getKey();
+
 #endif

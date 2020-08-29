@@ -68,6 +68,9 @@
 #include "menu.h"
 #include "values.h"
 #include "keyboard.h"
+#include "MeteringPageRender.h"
+#include "PrintMsg.h"
+#include "MenuPageRender.h"
 
 /*
  * Definice jednotlivych tlacitek
@@ -109,11 +112,24 @@ Menu * currentMenu;
  * 1 = hlavniMenu
  * 10 = coMerimMenu
  * 20 = rozliseniMenu
+ * 30 = limit low/high
  * 100 = mereni
+ * Nemenit primo, ale pres setAppState()!
  */
 int appState = 1;
 
+/**
+ * Rozhrani mezi nizkou a vysokou spotrebou.
+ */
+float lowHighThreshold = 5;
+
 // -------- vnitrni stavy aplikace ---------------
+
+
+void setAppState( int newState ) {
+  Serial.printf( "appState = %d\n", newState );
+  appState = newState;
+}
 
 
 /** spousteno Taskerem jedenkrat za minutu */
@@ -136,6 +152,7 @@ void doMeter()
 
   vals.doCompute( coMerim, interval_ms, curTime );
 }
+
 
 
 
@@ -201,9 +218,10 @@ Menu * coMerimMenu;
 Menu * rozliseniMenu;
 
 
-// pozice polozek v menu
+// pozice polozek v menu - pro editaci hodnot z podrizenych obrazovek
 #define HLAVNI_MENU_COMERIM 1
 #define HLAVNI_MENU_ROZLISENI 2
+#define HLAVNI_MENU_LIMIT 3
 
 
 /**
@@ -215,6 +233,7 @@ void definujMenu()
   hlavniMenu->addItem( "Spustit mereni", 100 );
   hlavniMenu->addItem( "Merim: Spotrebic", 10 );
   hlavniMenu->addItem( "Rozsah: 32V 2A", 20 );
+  hlavniMenu->addItem( "Low/high: 1 mA", 30 );
   hlavniMenu->addItem( "Vymazat pocitadla", 101 );
 
   coMerimMenu = new Menu( "Co merim" );
@@ -266,9 +285,80 @@ void setup() {
 
   definujMenu();
   currentMenu = hlavniMenu;
-  appState = 1;
+  setAppState(1);
 
   vals.resetCounters();
+}
+
+
+bool drawLimitPg = true;
+bool redrawLimitPg = false;
+char limitBuff[10];
+int cursorPos;
+#define LIMIT_MAX_LEN 4
+
+void appStateLimit()
+{
+  if( drawLimitPg ) {
+    sprintf( limitBuff, "%04.0f", lowHighThreshold );
+    limitPgFullDraw();
+    cursorPos = 0;
+    drawLimitPg = false;
+    redrawLimitPg = true;
+  }
+
+  while( keyAvail() ) {
+    char ch = getKey();
+    if( ch=='l' ) {
+
+      cursorPos--;
+      if( cursorPos<0 ) {
+        // zmacknuto ZPET na zacatku
+        setAppState( 1 );
+        hlavniMenu->clearState();
+        return;
+      }
+
+    } else if( ch=='r' ) {
+      
+      cursorPos++;
+      if( cursorPos==LIMIT_MAX_LEN ) {
+        // zmacknuto DAL na konci
+        setAppState( 1 );
+        hlavniMenu->clearState();
+        lowHighThreshold = atof( limitBuff );
+        char bafr[32];
+        sprintf( bafr, "Low/high: %.0f mA", lowHighThreshold );
+        hlavniMenu->updateText( HLAVNI_MENU_LIMIT, bafr );
+        return;
+      }
+
+    } else if( ch=='u' ) {
+
+      if( limitBuff[cursorPos]=='9' ) {
+        limitBuff[cursorPos]='0';
+      } else {
+        limitBuff[cursorPos]++;
+      }
+      
+    } else if( ch=='d' ) {
+
+      if( limitBuff[cursorPos]=='0' ) {
+        limitBuff[cursorPos]='9';
+      } else {
+        limitBuff[cursorPos]--;
+      }
+
+    }
+
+    redrawLimitPg = true;
+  } // while( keyAvail() )
+
+  if( redrawLimitPg ) {
+    LimitPgNumber( limitBuff, cursorPos, LIMIT_MAX_LEN, (char*)"mA" );
+    redrawLimitPg = false;
+  }
+
 }
 
 
@@ -284,7 +374,7 @@ void appStateMainMenu()
     // tlacitko zpet => spustit mereni
     if( i==-1 ) { i=100; }
     
-    appState = i;
+    setAppState( i );
     if( i==10 ) {
       
       currentMenu = coMerimMenu;
@@ -297,6 +387,11 @@ void appStateMainMenu()
       currentMenu = rozliseniMenu;
       rozliseniMenu->clearState();
       rozliseniMenu->setActive( rozliseni );
+      delay( MENU_CHANGE_DELAY );
+
+    } else if( i==30 ) {
+
+      drawLimitPg = true;
       delay( MENU_CHANGE_DELAY );
 
     } else if( i==100 ) {
@@ -313,7 +408,7 @@ void appStateMainMenu()
     } else if( i==101 ) {
       
       // smazat pocitadla a zpet do menu
-      appState = 1;
+      setAppState( 1 );
       hlavniMenu->clearState();
       hlavniMenu->setPos(0);
       vals.resetCounters();
@@ -339,7 +434,7 @@ void appStateCoMerimMenu()
     } // if( i>0 ) 
 
     // navrat do hlavniho menu 
-    appState = 1;
+    setAppState( 1 );
     currentMenu = hlavniMenu;
     hlavniMenu->setPos( HLAVNI_MENU_COMERIM );
     hlavniMenu->clearState();
@@ -372,7 +467,7 @@ void appStateRozliseniMenu()
     } // if( i>0 ) 
 
     // navrat do hlavniho menu 
-    appState = 1;
+    setAppState( 1 );
     currentMenu = hlavniMenu;
     hlavniMenu->setPos( HLAVNI_MENU_ROZLISENI );
     hlavniMenu->clearState();
@@ -380,14 +475,25 @@ void appStateRozliseniMenu()
   } // doslo k volbe!  
 }
 
+
 void appStateMenu()
 {
-  renderMenu();
-
   switch( appState ) {
-    case 1: appStateMainMenu(); break;
-    case 10: appStateCoMerimMenu(); break;
-    case 20: appStateRozliseniMenu(); break;
+    case 1: 
+      renderMenu();
+      appStateMainMenu(); 
+      break;
+    case 10: 
+      renderMenu();
+      appStateCoMerimMenu(); 
+      break;
+    case 20: 
+      renderMenu();
+      appStateRozliseniMenu(); 
+      break;
+    case 30: 
+      appStateLimit(); 
+      break;
   }
 }
 
@@ -403,7 +509,7 @@ void appStateMereni()
       if( ch=='l' ) {
 
           // zmacknuto ZPET, konec mereni, zastaveni periodickych tasku
-         appState = 1;
+         setAppState( 1 );
          hlavniMenu->clearState();
          tasker.setInterval( doComputeMinData, 0 );
          tasker.setInterval( doPrint, 0 );

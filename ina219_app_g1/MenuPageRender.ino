@@ -1,6 +1,4 @@
-#include "Menu.h"
-
-
+#include "menu.h"
 
 
 
@@ -90,4 +88,50 @@ void renderMenu()
     currentMenu->redraw = false;
   } // if( currentMenu->redraw )
 
+}
+
+
+/**
+ * Uvodni vykresleni stranky pro limit low/high
+ */
+void limitPgFullDraw()
+{
+  tft.setRotation(3);
+  tft.setTextSize(1);
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextDatum(TL_DATUM); // kresli se od top-left
+  tft.setTextColor(TFT_RED, TFT_BLACK);
+  tft.drawString("Limit low/high", NADPIS_X, 0, MENU_FONT );
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);   
+  tft.drawString("Rozhrani mezi" , NADPIS_X, MENU_VELIKOST_RADKU, MENU_FONT );
+  tft.drawString("nizkou a vysokou" , NADPIS_X, 2*MENU_VELIKOST_RADKU, MENU_FONT );
+  tft.drawString("spotrebou." , NADPIS_X, 3*MENU_VELIKOST_RADKU, MENU_FONT );
+}
+
+/**
+ * Vykresli zadavanou hodnotu 
+ */ 
+void LimitPgNumber( char * value, int cursorPos, int maxPos, char * append )
+{
+  int pos_x = RADEK_X;
+  int pos_y = 4*MENU_VELIKOST_RADKU;
+  char bafr[10];
+
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  for( int i = 0; i<cursorPos; i++ ) {
+    sprintf( bafr, "%c", value[i] );
+    pos_x += tft.drawString( bafr , pos_x, pos_y, MENU_FONT );
+  }
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  sprintf( bafr, "%c", value[cursorPos] );
+  pos_x += tft.drawString( bafr , pos_x, pos_y, MENU_FONT );
+  
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  for( int i = cursorPos+1; i<maxPos; i++ ) {
+    sprintf( bafr, "%c", value[i] );
+    pos_x += tft.drawString( bafr , pos_x, pos_y, MENU_FONT );
+  }
+  pos_x += tft.drawString( " " , pos_x, pos_y, MENU_FONT );
+  pos_x += tft.drawString( append , pos_x, pos_y, MENU_FONT );
+  pos_x += tft.drawString( "  " , pos_x, pos_y, MENU_FONT );
 }
