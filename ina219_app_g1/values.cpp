@@ -1,4 +1,5 @@
 #include "values.h"
+#include <arduino.h>
 
 void log( const char * fmt, float f, long long l1, long long l2 );
 
@@ -30,8 +31,6 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHi
     this->outPower = this->source_mW;
   }
 
-  
-
   this->shunt_power_mW = this->current_mA * this->shuntvoltage / 1000.0;
   this->shunt_pomer = this->power_mW>0 ? (this->shunt_power_mW/this->power_mW*100.0) : 0;
 
@@ -45,10 +44,21 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHi
   this->total_uAh = addFloat( this->total_uAh, capa_uAh );
 
   if( this->current_mA > lowHighThreshold ) {
+    if( this->currentPowerState!=2 ) {
+      // zmena stavu low->high
+      this->currentPowerState = 2;
+      this->lastHighPowerEventStartMsec = curTime;
+      this->highPowerEvents++;
+    }
     highPowerTime += interval_ms;
     this->highPower_uWh = addFloat( this->highPower_uWh, energy_uWh );
     this->highPower_uAh = addFloat( this->highPower_uAh, capa_uAh );
   } else {
+    if( this->currentPowerState!=1 ) {
+      // zmena stavu high->low
+      this->currentPowerState = 1;
+      this->lastHighPowerEventLengthMsec = curTime - this->lastHighPowerEventStartMsec;
+    }    
     lowPowerTime += interval_ms;
     this->lowPower_uWh = addFloat( this->lowPower_uWh, energy_uWh );
     this->lowPower_uAh = addFloat( this->lowPower_uAh, capa_uAh );
@@ -91,6 +101,10 @@ void Values::resetCounters()
   this->highPower_uAh = 0;
   this->highPower_uWh = 0;
   this->lowPower_uWh = 0;
+  this->currentPowerState = 1;
+  this->highPowerEvents = 0;
+  this->lastHighPowerEventLengthMsec = 0;
+  this->lastHighPowerEventStartMsec = millis();
   
   this->resetMinuteData();
 }

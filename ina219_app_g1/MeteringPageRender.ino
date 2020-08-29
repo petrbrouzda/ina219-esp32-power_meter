@@ -37,29 +37,33 @@ char numBuffer[32];
  * Formatuje cislo s jednotkou na 2-3 platna mista.
  * Pokud je cislo vetsi nez 100, zmensi ho 1000x a pouzije jednotku K.
  * 
- * formatNumber( 10.223456, "mWh", "Wh" ) -> "10.2 mWh"
- * formatNumber( 512.223456, "mWh", "Wh" ) -> "512 mWh"
- * formatNumber( 5912.223456, "mWh", "Wh" ) -> "5.91 Wh"
+ * formatNumber( 10.223456, "mWh", "Wh" ) -> "10.2 mWh "
+ * formatNumber( 512.223456, "mWh", "Wh" ) -> "512 mWh "
+ * formatNumber( 5912.223456, "mWh", "Wh" ) -> "5.91 Wh "
+ * formatNumber( 5912.223456, "mWh", "Wh", false ) -> "5.91 Wh"
  * 
  * Vraci odkaz do statickeho bufferu.
  */
-char * formatNumber( double number, const char * jednotkaBase, const char * jednotkaK )
+char * formatNumber( double number, const char * jednotkaBase, const char * jednotkaK, bool addSpace=true )
 {
   if( number < 1.0 ) {
-    sprintf( numBuffer, "%.02f %s ", number, jednotkaBase );   // do 1.0 je to 0.12 mWh
+    sprintf( numBuffer, "%.02f %s", number, jednotkaBase );   // do 1.0 je to 0.12 mWh
   } else if( number < 10.0 ) {
-    sprintf( numBuffer, "%.02f %s ", number, jednotkaBase );   // do 10.0 je to 1.23 mWh
+    sprintf( numBuffer, "%.02f %s", number, jednotkaBase );   // do 10.0 je to 1.23 mWh
   } else if( number < 100.0 ) {
-    sprintf( numBuffer, "%.01f %s ", number, jednotkaBase );   // do 100.0 je to 12.3 mWh
+    sprintf( numBuffer, "%.01f %s", number, jednotkaBase );   // do 100.0 je to 12.3 mWh
   } else if( number < 1000.0 ) {
-    sprintf( numBuffer, "%.0f %s ", number, jednotkaBase ); // 100-1000 je 123 mWh
+    sprintf( numBuffer, "%.0f %s", number, jednotkaBase ); // 100-1000 je 123 mWh
   } else if( number < 10000.0 ) {
-    sprintf( numBuffer, "%.02f %s ", (number/1000.0), jednotkaK ); // 1 000-10 000 je 1.23 Wh
+    sprintf( numBuffer, "%.02f %s", (number/1000.0), jednotkaK ); // 1 000-10 000 je 1.23 Wh
   } else if( number < 100000.0 ) { 
-    sprintf( numBuffer, "%.01f %s ", (number/1000.0), jednotkaK ); // 10 000 - 100 000 je 12.3 Wh
+    sprintf( numBuffer, "%.01f %s", (number/1000.0), jednotkaK ); // 10 000 - 100 000 je 12.3 Wh
   } else {
-    sprintf( numBuffer, "%.0f %s ", (number/1000.0), jednotkaK ); // >100 000 je 123 Wh
+    sprintf( numBuffer, "%.0f %s", (number/1000.0), jednotkaK ); // >100 000 je 123 Wh
   } 
+  if( addSpace ) {
+    strcat( numBuffer, " " );
+  }
   return numBuffer;
 }
 
@@ -397,36 +401,123 @@ void print_page3_half2()
             );             
 }
 
+void print_page4_half1()
+{
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            0, 0,
+            (char*)"current limit:" );
+
+    tftPrint( TFT_WHITE, 2,
+            X_COL_1+X_OFF_NADPIS,
+            1, 0,
+            formatNumber( lowHighThreshold, "mA", "A" )
+            );
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            0, 0,
+            (char*)"time:" );
+
+    char buff[32];
+    sprintf( buff, "%d s ", vals.meteringTime/1000 );
+          
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            1, 0,
+            buff );
+
+    
+               
+}
+
+
+void print_page4_half2()
+{
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            1, 1,
+            (char*)"high power events:" );
+
+    char bafr[32];
+    sprintf( bafr, "%d", vals.highPowerEvents );
+    
+    tftPrint( TFT_GREEN, 2,
+            X_COL_1+X_OFF_NADPIS,
+            2, 1,
+            bafr
+            );
+
+
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            2, 2,
+            (char*)"last high power event length:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_1+X_OFF_NADPIS,
+            3, 2,
+            formatNumber( vals.lastHighPowerEventLengthMsec, "ms", "s"  )
+            );    
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            3, 3,
+            (char*)"hig power time:" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_1+X_OFF_NADPIS,
+            4, 3,
+            formatNumber( (float)(vals.highPowerTime), "ms", "s" )
+            );
+
+}
+
+
+#define X_FOOTER_COL_1 0
+#define X_FOOTER_COL_2 70
+#define X_FOOTER_COL_3 140
+
 
 void print_page_footer()
 {
-
     if( coMerim==11 ) {
       tftPrint( TFT_GREEN, 1,
-            X_COL_1,
-            4, 4,
-            (char*)"[source]" );
-    } else {
-      tftPrint( TFT_YELLOW, 1,
-            X_COL_1,
+            X_FOOTER_COL_1,
             4, 4,
             (char*)"[load]" );
+    } else {
+      tftPrint( TFT_YELLOW, 1,
+            X_FOOTER_COL_1,
+            4, 4,
+            (char*)"[source]" );
     }
 
     if( rozliseni==21 ) {
       tftPrint( TFT_GREEN, 1,
-            STATUS2_OFFSET+X_COL_1,
+            X_FOOTER_COL_2,
             4, 4,
             (char*)"[32V-2A]" );
     } else if( rozliseni==22 ) {
       tftPrint( TFT_WHITE, 1,
-            STATUS2_OFFSET+X_COL_1,
+            X_FOOTER_COL_2,
             4, 4,
             (char*)"[32V-1A]" );
     } else {
       tftPrint( TFT_YELLOW, 1,
-            STATUS2_OFFSET+X_COL_1,
+            X_FOOTER_COL_2,
             4, 4,
             (char*)"[16V-0.4A]" );
     }
+
+    char bafr[32];
+    sprintf( bafr, "[l-h %s]", formatNumber( lowHighThreshold, "mA", "A", false ) );
+    tftPrint( TFT_GREEN, 1,
+            X_FOOTER_COL_3,
+            4, 4,
+            bafr );
+    
 }

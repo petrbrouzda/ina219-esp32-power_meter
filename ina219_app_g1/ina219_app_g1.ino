@@ -179,7 +179,6 @@ void doPrint()
     tft.setRotation(3);
     tft.fillScreen(TFT_BLACK);
     tft.setTextDatum(TL_DATUM); // kresli se od top-left 
-    meteringPageChanged = false;
   }
   
   // tedy po 14 msec zmerime hodnoty
@@ -207,9 +206,18 @@ void doPrint()
     doMeter();
     print_page3_half2();
     
+  } else if( displayedPage==4 ) {
+    
+    print_page4_half1();
+    doMeter();
+    print_page4_half2();
+    
   }
 
-  print_page_footer();  
+  if( meteringPageChanged ) {
+    print_page_footer();  
+    meteringPageChanged = false;
+  }
 
   // na konci obrazovky (po dalsich cca 10 msec vykreslovani) zmerime hodnoty,
   // protoze po navratu do loop bude zase 10 msec pauza
@@ -379,7 +387,7 @@ void appStateLimit()
 
 
 #define MENU_CHANGE_DELAY 50
-#define METERING_DISPLAY_REFRESH 1500
+#define METERING_DISPLAY_REFRESH 1000
 
 void appStateMainMenu()
 {
@@ -414,6 +422,7 @@ void appStateMainMenu()
       
       // spoustim mereni
       displayedPage = 1;
+      meteringPageChanged = true;
       vals.lastMeteringTime = millis() - 1;
       // rovnou to zmerime a zobrazime na obrazovce, aby uzivatel necekal 1.5 sec na reakci
       doMeter();
@@ -515,7 +524,7 @@ void appStateMenu()
 
 
 #define DISPLAY_PAGE_MIN 1
-#define DISPLAY_PAGE_MAX 3
+#define DISPLAY_PAGE_MAX 4
 
 void appStateMereni()
 {

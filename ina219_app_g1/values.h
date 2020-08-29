@@ -77,6 +77,19 @@ class Values
     void doCompute( int coMerim, long interval_ms, long curTime, float lowHighThreshold );
     void resetCounters();
     void resetMinuteData();
+
+    /**
+     * 1 = low
+     * 2 = high
+     */
+    int currentPowerState = 0;
+
+    /**
+     * Pocet high power udalosti
+     */
+    int highPowerEvents = 0;
+    int lastHighPowerEventLengthMsec = 0;
+    int lastHighPowerEventStartMsec = 0;
 };
 
 #endif
