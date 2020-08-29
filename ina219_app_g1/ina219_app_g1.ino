@@ -132,10 +132,6 @@ bool meteringPageChanged = true;
 // -------- vnitrni stavy aplikace ---------------
 
 
-void log( const char * fmt, float f, long long l1, long long l2 )
-{
-  Serial.printf( fmt, f, l1, l2 );
-}
 
 void setAppState( int newState ) {
   Serial.printf( "appState = %d\n", newState );

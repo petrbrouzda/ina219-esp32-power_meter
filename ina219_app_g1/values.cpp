@@ -6,17 +6,13 @@ long long addFloat( long long val, float num )
 {
   float f2 = 1000.0*num;
   long long l2 = f2;
-  log( "   cnv %f => %ld \n", f2, l2, 1 );
-  
   long long rc = l2 + val;
-  log( "add %f + %ld => %ld\n", num, val, rc );
   return rc;
 }
 
 float getVal( long long val )
 {
   float rc = ((float)val)/1000.0;
-  log( "get %f <= %ld \n", rc, val, 1L );
   return rc;
 }
 
