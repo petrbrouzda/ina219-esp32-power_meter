@@ -1,9 +1,6 @@
 #ifndef X_VALUES_H
 #define X_VALUES_H
 
-long long addFloat( long long val, float num );
-float getVal( long long val );
-
 class Values
 {
   public:
@@ -11,15 +8,15 @@ class Values
     long lastMeteringTime = 0;
 
     /** celkova spotrebovana energie */
-    long long total_uWh = 0;
+    double total_uWh = 0;
     
     long total_ms = 0;
 
     /** celkovy spotrebovany proud*cas (kapacita) */
-    long long total_uAh = 0;
+    double total_uAh = 0;
     
     /** napeti - spotrebice nebo zdroje (za nebo pred odporem) podle toho, co merime */
-    float outVoltage;
+    float outVoltage = 0;
     /** vykon - spotrebice nebo zdroje (za nebo pred odporem) podle toho, co merime */
     float outPower;
     
@@ -66,13 +63,13 @@ class Values
     long highPowerTime = 0;
 
     /** celkova spotreba v low power */
-    long long lowPower_uWh = 0;
+    double lowPower_uWh = 0;
     /** celkova spotreba v high power */
-    long long highPower_uWh = 0;
+    double highPower_uWh = 0;
     /** celkova spotreba v low power */
-    long long lowPower_uAh = 0;
+    double lowPower_uAh = 0;
     /** celkova spotreba v high power */
-    long long highPower_uAh = 0;
+    double highPower_uAh = 0;
 
     void doCompute( int coMerim, long interval_ms, long curTime, float lowHighThreshold );
     void resetCounters();
@@ -89,6 +86,7 @@ class Values
      */
     int highPowerEvents = 0;
     int lastHighPowerEventLengthMsec = 0;
+    int maxHighPowerEventLengthMsec = 0;
     int lastHighPowerEventStartMsec = 0;
 };
 

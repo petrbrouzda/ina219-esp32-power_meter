@@ -312,6 +312,7 @@ void setup() {
   setAppState(1);
 
   vals.resetCounters();
+
 }
 
 
@@ -426,6 +427,7 @@ void appStateMainMenu()
       vals.lastMeteringTime = millis() - 1;
       // rovnou to zmerime a zobrazime na obrazovce, aby uzivatel necekal 1.5 sec na reakci
       doMeter();
+      vals.resetMinuteData();
       doPrint();
       tasker.setInterval( doPrint, METERING_DISPLAY_REFRESH );
       tasker.setInterval( doComputeMinData, 60000 );
@@ -575,3 +577,15 @@ void loop()
   
   delay(10);
 }
+
+/*
+Použití knihovny Wire ve verzi 1.0.1 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\Wire 
+Použití knihovny Adafruit_INA219 ve verzi 1.0.9 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Adafruit_INA219 
+Použití knihovny Adafruit_BusIO ve verzi 1.4.1 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Adafruit_BusIO 
+Použití knihovny SPI ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\SPI 
+Použití knihovny TFT_eSPI ve verzi 2.2.14 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\TFT_eSPI 
+Použití knihovny FS ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\FS 
+Použití knihovny SPIFFS ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\SPIFFS 
+Použití knihovny Tasker ve verzi 2.0 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Tasker 
+*/
+ 

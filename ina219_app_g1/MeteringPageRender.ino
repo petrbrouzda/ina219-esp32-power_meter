@@ -76,7 +76,7 @@ void print_dumpValuesToSerial()
     Serial.printf( "load %.02f V  %.02f mW  %.02f %% \t", vals.busvoltage, vals.power_mW, (100.0-vals.shunt_pomer) ); 
     Serial.printf( "shunt %.02f mV  %.02f mW  %.02f %% \n", vals.shuntvoltage, vals.shunt_power_mW, vals.shunt_pomer); 
     Serial.printf( "    energy %f uWh per %d ms \t ", vals.energy_uWh, vals.interval_ms );
-    Serial.printf( "total %f mWh per %d s \t ", (getVal(vals.total_uWh)/1000.0), vals.total_ms/1000 );
+    Serial.printf( "total %f mWh per %d s \t ", vals.total_uWh/1000.0), vals.total_ms/1000 );
     Serial.printf( "avg %f mW \t", vals.avg_power ); 
     Serial.printf( "total %f mAh \t", (getCal(vals.total_uAh)/1000.0) ); 
     Serial.println("");
@@ -135,7 +135,7 @@ void print_page1_half1()
     tftPrint( TFT_GREEN, 2,
             X_COL_1+X_OFF_NADPIS,
             4, 3,
-            formatNumber( (getVal(vals.total_uAh)/1000.0), "mAh", "Ah" )
+            formatNumber( vals.total_uAh/1000.0, "mAh", "Ah" )
             );        
 }
 
@@ -246,7 +246,7 @@ void print_page2_half2()
             0, 0,
             (char*)"max current {min):" );
 
-    tftPrint( TFT_GREEN, 2,
+    tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             1, 0,
             formatNumber( vals.maxCurrentMin, "mA", "A" )
@@ -296,16 +296,17 @@ void print_page2_half2()
 void print_page3_half1()
 {
     
-
     tftPrint( TFT_WHITE, 1,
             X_COL_1,
             0, 0,
-            (char*)"current limit:" );
+            (char*)"current:" );
 
-    tftPrint( TFT_WHITE, 2,
+    tftPrint( 
+            vals.current_mA>lowHighThreshold ? TFT_RED : TFT_YELLOW,
+            2,
             X_COL_1+X_OFF_NADPIS,
             1, 0,
-            formatNumber( lowHighThreshold, "mA", "A" )
+            formatNumber( vals.current_mA, "mA", "A" )
             );
 
     
@@ -330,7 +331,7 @@ void print_page3_half1()
     tftPrint( TFT_YELLOW, 2,
             X_COL_1+X_OFF_NADPIS,
             3, 2,
-            formatNumber( getVal(vals.lowPower_uAh)/1000.0, "mAh", "Ah"  )
+            formatNumber( vals.lowPower_uAh/1000.0, "mAh", "Ah"  )
             );    
 
 
@@ -342,7 +343,7 @@ void print_page3_half1()
     tftPrint( TFT_YELLOW, 2,
             X_COL_1+X_OFF_NADPIS,
             4, 3,
-            formatNumber( getVal(vals.lowPower_uWh)/1000.0, "mWh", "Wh"  )
+            formatNumber( vals.lowPower_uWh/1000.0, "mWh", "Wh"  )
             ); 
    
 }
@@ -364,18 +365,16 @@ void print_page3_half2()
             buff );
 
 
-  
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
             1, 1,
-            (char*)"hig power time:" );
+            (char*)"high power time:" );
 
     tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             2, 1,
             formatNumber( (float)(vals.highPowerTime), "ms", "s" )
             );
-
 
     
     tftPrint( TFT_WHITE, 1,
@@ -386,8 +385,9 @@ void print_page3_half2()
     tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             3, 2,
-            formatNumber( getVal(vals.highPower_uAh)/1000.0, "mAh", "Ah"  )
+            formatNumber( vals.highPower_uAh/1000.0, "mAh", "Ah"  )
             );  
+
 
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
@@ -397,7 +397,7 @@ void print_page3_half2()
     tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             4, 3,
-            formatNumber( getVal(vals.highPower_uWh)/1000.0, "mWh", "Wh"  )
+            formatNumber( vals.highPower_uWh/1000.0, "mWh", "Wh"  )
             );             
 }
 
@@ -407,35 +407,17 @@ void print_page4_half1()
     tftPrint( TFT_WHITE, 1,
             X_COL_1,
             0, 0,
-            (char*)"current limit:" );
+            (char*)"current:" );
 
-    tftPrint( TFT_WHITE, 2,
+    tftPrint( 
+            vals.current_mA>lowHighThreshold ? TFT_RED : TFT_YELLOW, 
+            2,
             X_COL_1+X_OFF_NADPIS,
             1, 0,
-            formatNumber( lowHighThreshold, "mA", "A" )
-            );
-
-    tftPrint( TFT_WHITE, 1,
-            X_COL_2,
-            0, 0,
-            (char*)"time:" );
-
-    char buff[32];
-    sprintf( buff, "%d s ", vals.meteringTime/1000 );
-          
-    tftPrint( TFT_GREEN, 2,
-            X_COL_2+X_OFF_NADPIS,
-            1, 0,
-            buff );
-
-    
-               
-}
+            formatNumber( vals.current_mA, "mA", "A" )
+            );    
 
 
-void print_page4_half2()
-{
-    
     tftPrint( TFT_WHITE, 1,
             X_COL_1,
             1, 1,
@@ -451,34 +433,93 @@ void print_page4_half2()
             );
 
 
-    
     tftPrint( TFT_WHITE, 1,
             X_COL_1,
             2, 2,
-            (char*)"last high power event length:" );
+            (char*)"high power time:" );
 
     tftPrint( TFT_GREEN, 2,
             X_COL_1+X_OFF_NADPIS,
             3, 2,
-            formatNumber( vals.lastHighPowerEventLengthMsec, "ms", "s"  )
-            );    
+            formatNumber( (float)(vals.highPowerTime), "ms", "s" )
+            );     
+
 
     tftPrint( TFT_WHITE, 1,
             X_COL_1,
             3, 3,
-            (char*)"hig power time:" );
+            (char*)"last HPE length:" );
 
-    tftPrint( TFT_RED, 2,
+    tftPrint( TFT_GREEN, 2,
             X_COL_1+X_OFF_NADPIS,
             4, 3,
-            formatNumber( (float)(vals.highPowerTime), "ms", "s" )
-            );
+            formatNumber( vals.lastHighPowerEventLengthMsec, "ms", "s"  )
+            );               
+}
 
+
+void print_page4_half2()
+{
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            0, 0,
+            (char*)"time:" );
+
+    char buff[32];
+    sprintf( buff, "%d s ", vals.meteringTime/1000 );
+          
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            1, 0,
+            buff );
+
+
+    if( vals.highPowerEvents>0 ) {
+      tftPrint( TFT_WHITE, 1,
+              X_COL_2,
+              1, 1,
+              (char*)"last HPE age:" );
+  
+      sprintf( buff, "%d s ", (millis()-vals.lastHighPowerEventStartMsec)/1000 );
+      
+      tftPrint( TFT_GREEN, 2,
+              X_COL_2+X_OFF_NADPIS,
+              2, 1,
+              buff
+              );
+    }
+    
+
+    if( vals.highPowerEvents>0 ) {
+      tftPrint( TFT_WHITE, 1,
+              X_COL_2,
+              2, 2,
+              (char*)"avg HPE length:" );
+  
+      tftPrint( TFT_GREEN, 2,
+              X_COL_2+X_OFF_NADPIS,
+              3, 2,
+              formatNumber( ((double)vals.highPowerTime)/((double)vals.highPowerEvents), "ms", "s" )
+              );     
+    }
+
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            3, 3,
+            (char*)"max HPE length:" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_2+X_OFF_NADPIS,
+            4, 3,
+            formatNumber( vals.maxHighPowerEventLengthMsec, "ms", "s"  )
+            );               
 }
 
 
 #define X_FOOTER_COL_1 0
-#define X_FOOTER_COL_2 70
+#define X_FOOTER_COL_2 60
 #define X_FOOTER_COL_3 140
 
 
@@ -514,7 +555,7 @@ void print_page_footer()
     }
 
     char bafr[32];
-    sprintf( bafr, "[l-h %s]", formatNumber( lowHighThreshold, "mA", "A", false ) );
+    sprintf( bafr, "[%s]", formatNumber( lowHighThreshold, "mA", "A", false ) );
     tftPrint( TFT_GREEN, 1,
             X_FOOTER_COL_3,
             4, 4,
