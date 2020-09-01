@@ -285,7 +285,7 @@ void print_page2_half2()
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
             2, 2,
-            (char*)"avg power:" );
+            (char*)"max voltage (total):" );
 
     tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
