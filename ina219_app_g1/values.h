@@ -44,6 +44,7 @@ class Values
     float maxCurrentMin = 0;
     /** max proud celkove */
     float maxCurrentTotal = 0;
+    long maxCurrentTime = 0;
     
     /** min napeti celkove */
     float minVoltageTotal = 100;
@@ -51,6 +52,10 @@ class Values
     float maxVoltageTotal = -100;
     /** min napeti v teto minute */
     float minVoltageMin = 100;
+
+    long minVoltageTime = 0;
+    long maxVoltageTime = 0;
+    
     /** min napeti v teto minute */
     float maxVoltageMin = -100;
     

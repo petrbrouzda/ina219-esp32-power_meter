@@ -101,6 +101,9 @@ Values vals;
 /** Zobrazovane stranky v rezimu mereni:
  * - 1 = vsechny meraky
  * - 2 = historie napeti
+ * - 3 = historie proudu
+ * - 4 = low pover 1/2
+ * - 5 = low power 2/2
  */
 int displayedPage = 1;
 
@@ -211,6 +214,12 @@ void doPrint()
     print_page4_half1();
     doMeter();
     print_page4_half2();
+    
+  } else if( displayedPage==5 ) {
+    
+    print_page5_half1();
+    doMeter();
+    print_page5_half2();
     
   }
 
@@ -526,7 +535,7 @@ void appStateMenu()
 
 
 #define DISPLAY_PAGE_MIN 1
-#define DISPLAY_PAGE_MAX 4
+#define DISPLAY_PAGE_MAX 5
 
 void appStateMereni()
 {

@@ -58,15 +58,18 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHi
   }
   if( this->current_mA > this->maxCurrentTotal ) {
     this->maxCurrentTotal = this->current_mA;
+    this->maxCurrentTime = time(NULL);
   }
   if( this->outVoltage > this->maxVoltageTotal ) {
     this->maxVoltageTotal = this->outVoltage;
+    this->maxVoltageTime = time(NULL);
   }
   if( this->outVoltage > this->maxVoltageMin ) {
     this->maxVoltageMin = this->outVoltage;
   }
   if( this->outVoltage < this->minVoltageTotal ) {
     this->minVoltageTotal = this->outVoltage;
+    this->minVoltageTime = time(NULL);
   }
   if( this->outVoltage < this->minVoltageMin ) {
     this->minVoltageMin = this->outVoltage;
@@ -102,4 +105,7 @@ void Values::resetMinuteData()
   this->maxCurrentMin = this->current_mA;
   this->minVoltageMin = this->outVoltage;
   this->maxVoltageMin = this->outVoltage;
+  this->minVoltageTime = time(NULL);
+  this->maxVoltageTime = time(NULL);
+  this->maxCurrentTime = time(NULL);
 }

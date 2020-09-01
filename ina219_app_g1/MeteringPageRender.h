@@ -5,4 +5,8 @@ void print_page2_half1();
 void print_page2_half2();
 void print_page3_half1();
 void print_page3_half2();
+void print_page4_half1();
+void print_page4_half2();
+void print_page5_half1();
+void print_page5_half2();
 void print_page_footer();

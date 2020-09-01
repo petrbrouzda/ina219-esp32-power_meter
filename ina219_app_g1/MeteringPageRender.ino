@@ -127,69 +127,72 @@ void print_page1_half1()
 
 
 
+    
+
     tftPrint( TFT_WHITE, 1,
             X_COL_1,
             3, 3,
-            (char*)"capacity:" );
+            (char*)"avg power:" );
 
     tftPrint( TFT_GREEN, 2,
             X_COL_1+X_OFF_NADPIS,
             4, 3,
-            formatNumber( vals.total_uAh/1000.0, "mAh", "Ah" )
-            );        
+            formatNumber( vals.avg_power, "mW", "W" )
+            );            
 }
 
 
 void print_page1_half2()
 {
   char buff[32];
+
   tftPrint( TFT_WHITE, 1,
             X_COL_2,
             0, 0,
-            (char*)"max current {min):" );
-
-    tftPrint( TFT_GREEN, 2,
-            X_COL_2+X_OFF_NADPIS,
-            1, 0,
-            formatNumber( vals.maxCurrentMin, "mA", "A" )
-            );
-
-
-    tftPrint( TFT_WHITE, 1,
-            X_COL_2,
-            1, 1,
-            (char*)"max current {total):" );
-
-    tftPrint( TFT_RED, 2,
-            X_COL_2+X_OFF_NADPIS,
-            2, 1,
-            formatNumber( vals.maxCurrentTotal, "mA", "A" )
-            );
-
-
-    tftPrint( TFT_WHITE, 1,
-            X_COL_2,
-            2, 2,
-            (char*)"avg power:" );
-
-    tftPrint( TFT_GREEN, 2,
-            X_COL_2+X_OFF_NADPIS,
-            3, 2,
-            formatNumber( vals.avg_power, "mW", "W" )
-            );
-
-
-    tftPrint( TFT_WHITE, 1,
-            X_COL_2,
-            3, 3,
             (char*)"time:" );
 
     sprintf( buff, "%d s", vals.meteringTime/1000 );
           
     tftPrint( TFT_GREEN, 2,
             X_COL_2+X_OFF_NADPIS,
-            4, 3,
+            1, 0,
             buff );
+  
+  tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            1, 1,
+            (char*)"max current {min):" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            2, 1,
+            formatNumber( vals.maxCurrentMin, "mA", "A" )
+            );
+
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            2, 2,
+            (char*)"max current {total):" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_2+X_OFF_NADPIS,
+            3, 2,
+            formatNumber( vals.maxCurrentTotal, "mA", "A" )
+            );
+
+
+   tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            3, 3,
+            (char*)"capacity:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            4, 3,
+            formatNumber( vals.total_uAh/1000.0, "mAh", "Ah" )
+            );        
+   
 }
 
 
@@ -231,37 +234,51 @@ void print_page2_half1()
             X_COL_1+X_OFF_NADPIS,
             3, 2,
             formatNumber( vals.maxVoltageMin*1000.0, "mV", "V"  )
+            );   
+
+    char bafr[32];
+    sprintf( bafr, "%d s   ", time(NULL)-vals.minVoltageTime );
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            3, 3,
+            (char*)"min voltage time:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_1+X_OFF_NADPIS,
+            4, 3,
+            bafr
             );    
 
-
-   
 }
 
 
 void print_page2_half2()
 {
   
-  tftPrint( TFT_WHITE, 1,
+    tftPrint( TFT_WHITE, 1,
             X_COL_2,
             0, 0,
-            (char*)"max current {min):" );
+            (char*)"time:" );
 
-    tftPrint( TFT_RED, 2,
+    char buff[32];
+    sprintf( buff, "%d s ", vals.meteringTime/1000 );
+          
+    tftPrint( TFT_GREEN, 2,
             X_COL_2+X_OFF_NADPIS,
             1, 0,
-            formatNumber( vals.maxCurrentMin, "mA", "A" )
-            );
-
+            buff );
+  
 
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
             1, 1,
-            (char*)"max current {total):" );
+            (char*)"min voltage {total):" );
 
-    tftPrint( TFT_RED, 2,
+    tftPrint( TFT_YELLOW, 2,
             X_COL_2+X_OFF_NADPIS,
             2, 1,
-            formatNumber( vals.maxCurrentTotal, "mA", "A" )
+            formatNumber( vals.minVoltageTotal*1000.0, "mV", "V" )
             );
 
 
@@ -270,16 +287,63 @@ void print_page2_half2()
             2, 2,
             (char*)"avg power:" );
 
-    tftPrint( TFT_GREEN, 2,
+    tftPrint( TFT_RED, 2,
             X_COL_2+X_OFF_NADPIS,
             3, 2,
-            formatNumber( vals.avg_power, "mW", "W" )
+            formatNumber( vals.maxVoltageTotal*1000.0, "mV", "V" )
             );
 
 
+    sprintf( buff, "%d s   ", time(NULL)-vals.maxVoltageTime );
+    
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
             3, 3,
+            (char*)"max voltage time:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            4, 3,
+            buff
+            );   
+    
+}
+
+
+void print_page3_half1()
+{
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            0, 0,
+            (char*)"current:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_1+X_OFF_NADPIS,
+            1, 0,
+            formatNumber( vals.current_mA, "mA", "A" )
+            );
+
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_1,
+            2, 2,
+            (char*)"max current {min):" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_1+X_OFF_NADPIS,
+            3, 2,
+            formatNumber( vals.maxCurrentMin, "mA", "A" )
+            ); 
+
+
+}
+
+
+void print_page3_half2()
+{
+  tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            0, 0,
             (char*)"time:" );
 
     char buff[32];
@@ -287,13 +351,39 @@ void print_page2_half2()
           
     tftPrint( TFT_GREEN, 2,
             X_COL_2+X_OFF_NADPIS,
-            4, 3,
+            1, 0,
             buff );
+  
+
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            2, 2,
+            (char*)"max current {total):" );
+
+    tftPrint( TFT_RED, 2,
+            X_COL_2+X_OFF_NADPIS,
+            3, 2,
+            formatNumber( vals.maxCurrentTotal, "mA", "A" )
+            );
+
+    sprintf( buff, "%d s   ", time(NULL)-vals.maxCurrentTime );
+    
+    tftPrint( TFT_WHITE, 1,
+            X_COL_2,
+            3, 3,
+            (char*)"max current time:" );
+
+    tftPrint( TFT_GREEN, 2,
+            X_COL_2+X_OFF_NADPIS,
+            4, 3,
+            buff
+            );   
+   
 }
 
 
 
-void print_page3_half1()
+void print_page4_half1()
 {
     
     tftPrint( TFT_WHITE, 1,
@@ -349,7 +439,7 @@ void print_page3_half1()
 }
 
 
-void print_page3_half2()
+void print_page4_half2()
 {
     tftPrint( TFT_WHITE, 1,
             X_COL_2,
@@ -401,7 +491,7 @@ void print_page3_half2()
             );             
 }
 
-void print_page4_half1()
+void print_page5_half1()
 {
 
     tftPrint( TFT_WHITE, 1,
@@ -458,7 +548,7 @@ void print_page4_half1()
 }
 
 
-void print_page4_half2()
+void print_page5_half2()
 {
 
     tftPrint( TFT_WHITE, 1,
@@ -520,7 +610,8 @@ void print_page4_half2()
 
 #define X_FOOTER_COL_1 0
 #define X_FOOTER_COL_2 60
-#define X_FOOTER_COL_3 140
+#define X_FOOTER_COL_3 130
+#define X_FOOTER_COL_4 190
 
 
 void print_page_footer()
@@ -555,10 +646,16 @@ void print_page_footer()
     }
 
     char bafr[32];
-    sprintf( bafr, "[%s]", formatNumber( lowHighThreshold, "mA", "A", false ) );
+    sprintf( bafr, "[%.0f mA]", lowHighThreshold );
     tftPrint( TFT_GREEN, 1,
             X_FOOTER_COL_3,
             4, 4,
             bafr );
+
+    sprintf( bafr, "[%d]", displayedPage );
+    tftPrint( TFT_GREEN, 1,
+            X_FOOTER_COL_4,
+            4, 4,
+            bafr );            
     
 }
