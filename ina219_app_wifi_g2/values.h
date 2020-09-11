@@ -47,6 +47,8 @@ class Values
     /** max proud celkove */
     float maxCurrentTotal = 0;
     long maxCurrentTime = 0;
+    float maxCurrentHPE = 0;
+    float maxCurrentLPE = 0;
     
     /** min napeti celkove */
     float minVoltageTotal = 100;
@@ -78,10 +80,11 @@ class Values
     /** celkova spotreba v high power */
     double highPower_uAh = 0;
 
-    void doCompute( int coMerim, long interval_ms, long curTime, float lowHighThreshold );
+    void doCompute( int coMerim, long interval_ms, long curTime, float lowHighThreshold, Csv * csv , bool saveEvents );
     void resetCounters();
     void resetMinuteData();
-    void write( Csv * csv );
+    void write( Csv * csv ,const char * event );
+    void writeHeader( Csv * csv  );
 
     /**
      * 1 = low

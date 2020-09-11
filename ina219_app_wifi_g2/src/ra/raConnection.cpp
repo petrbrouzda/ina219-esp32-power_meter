@@ -647,3 +647,17 @@ int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, c
 }
     
 
+/**
+ * Pokud neni spojene, prihlasi se
+ * Vraci true = prihlaseno; false = neprihlaseno
+ */ 
+bool raConnection::isConnected()
+{
+    if( !this->connected ) {
+        this->login();
+    }
+    if( !this->connected ) {
+        return false;           
+    }
+    return true;
+}

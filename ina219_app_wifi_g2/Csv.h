@@ -16,6 +16,8 @@ class Csv
     void addString( const char * s );
     void endLine();
     bool hasData();
+    void setName( const char * name );
+    const char * getName();
     
 
   private:
@@ -27,6 +29,8 @@ class Csv
     const char * delimiter;
     bool firstItem;
     void addField( const char * s );
+    const char * name;
+    
 };
 
 #endif

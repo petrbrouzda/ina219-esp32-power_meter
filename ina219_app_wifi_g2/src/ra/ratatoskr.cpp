@@ -96,3 +96,13 @@ int ratatoskr::sendBlob( unsigned char * blob, int blobSize, int startTime, char
 {
     return this->conn->sendBlob( blob, blobSize, startTime, desc, extension );
 }
+
+bool ratatoskr::isConnected()
+{
+    return this->conn->isConnected();
+}
+
+int ratatoskr::getStorageUsage()
+{
+    return this->storage->getUsage();
+}

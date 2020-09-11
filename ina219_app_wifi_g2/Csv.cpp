@@ -3,13 +3,6 @@
 #include <string.h>
 #include "Csv.h"
 
-/*
- *   private:
-    char * data;
-    int size;
-    int dataStart;
-    int endPtr;
- */
 
 Csv::Csv( int size, char decimalPoint, const  char * delimiter )
 {
@@ -21,7 +14,19 @@ Csv::Csv( int size, char decimalPoint, const  char * delimiter )
     this->dataStart = 0;
     this->firstItem = true;
     this->data[ this->endPtr ] = 0;
+    this->name = "csv";
 }
+
+void Csv::setName( const char * name )
+{
+    this->name = name;
+}
+
+const char * Csv::getName()
+{
+    return this->name;
+}
+
 
 void Csv::addField( const char * s )
 {
@@ -94,7 +99,11 @@ void Csv::rewind()
 
 int Csv::getUsage()
 {
-  return (this->endPtr * 100 / this->size) + 1;
+  int rc = (this->endPtr * 100 / this->size);
+  if( rc>50 && rc<100 ) {
+    rc++;
+  }
+  return rc;
 }
 
 int Csv::getSize()

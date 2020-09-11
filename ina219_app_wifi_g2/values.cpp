@@ -2,7 +2,7 @@
 #include <arduino.h>
 
 
-void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHighThreshold )
+void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHighThreshold, Csv * csv, bool saveEvents )
 {
   this->source = this->busvoltage + (this->shuntvoltage / 1000.0);
   this->source_mW = this->source * this->current_mA;
@@ -28,16 +28,30 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHi
   this->total_uAh += capa_uAh ;
 
   if( this->current_mA > lowHighThreshold ) {
+    
+    highPowerTime += interval_ms;
+    this->highPower_uWh += energy_uWh;
+    this->highPower_uAh += capa_uAh ;
+
     if( this->currentPowerState!=2 ) {
       // zmena stavu low->high
       this->currentPowerState = 2;
       this->lastHighPowerEventStartMsec = curTime;
       this->highPowerEvents++;
+      this->maxCurrentHPE = this->current_mA;
+      if( saveEvents ) { this->write( csv, "HP" ); }
     }
-    highPowerTime += interval_ms;
-    this->highPower_uWh += energy_uWh;
-    this->highPower_uAh += capa_uAh ;
+
+    if( this->maxCurrentHPE < this->current_mA ) {
+      this->maxCurrentHPE = this->current_mA;
+    }
+    
   } else {
+    
+    lowPowerTime += interval_ms;
+    this->lowPower_uWh += energy_uWh ;
+    this->lowPower_uAh += capa_uAh ;
+    
     if( this->currentPowerState!=1 ) {
       // zmena stavu high->low
       this->currentPowerState = 1;
@@ -45,10 +59,13 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHi
       if( this->lastHighPowerEventLengthMsec > this->maxHighPowerEventLengthMsec ) {
         this->maxHighPowerEventLengthMsec = this->lastHighPowerEventLengthMsec;
       }
+      this->maxCurrentLPE = this->current_mA;
+      if( saveEvents ) { this->write( csv, "LP" ); }
     }    
-    lowPowerTime += interval_ms;
-    this->lowPower_uWh += energy_uWh ;
-    this->lowPower_uAh += capa_uAh ;
+
+    if( this->maxCurrentLPE < this->current_mA ) {
+      this->maxCurrentLPE = this->current_mA;
+    }
   }
 
   this->meteringTime += interval_ms;
@@ -76,9 +93,11 @@ void Values::doCompute( int coMerim, long interval_ms, long curTime, float lowHi
   }
 }
 
-void Values::write( Csv * csv )
+void Values::write( Csv * csv, const char * event )
 {
-  csv->addInt( this->meteringTime / 1000 );
+  csv->addDouble( ((double)this->meteringTime) / 1000.0 );
+  csv->addString( event );
+ 
   csv->addDouble( this->outVoltage );
   csv->addDouble( this->current_mA );
   csv->addDouble( this->outPower );
@@ -94,7 +113,7 @@ void Values::write( Csv * csv )
   csv->addString(" ");
   
   csv->addInt( this->highPowerEvents );
-  csv->addInt( this->highPowerTime );
+  csv->addDouble( ((double)this->highPowerTime)/1000.0 );
   csv->addDouble( this->highPower_uAh/1000.0 );
   csv->addDouble( this->highPower_uWh/1000.0 );
   csv->addInt( this->lastHighPowerEventLengthMsec );
@@ -104,12 +123,58 @@ void Values::write( Csv * csv )
     csv->addString(" " );
   }
   csv->addInt( this->maxHighPowerEventLengthMsec );
+  if( strcmp(event,"LP")==0 ) {
+    csv->addDouble( this->maxCurrentHPE );  
+  } else {
+    csv->addString(" ");
+  }
   csv->addString(" ");
   
-  csv->addInt( this->lowPowerTime );
+  csv->addDouble( ((double)this->lowPowerTime)/1000.0 );
   csv->addDouble( this->lowPower_uAh/1000.0 );
   csv->addDouble( this->lowPower_uWh/1000.0 );
+  if( strcmp(event,"HP")==0 ) {
+    csv->addDouble( this->maxCurrentLPE );
+  } else {
+    csv->addString(" ");
+  }
   
+  csv->endLine();
+}
+
+void Values::writeHeader( Csv * csv  )
+{
+  csv->addString( "t [s]" );
+  csv->addString("event");
+  csv->addString( "U [V]" );
+  csv->addString( "I [mA]" );
+  csv->addString( "P [mW]" );
+  csv->addString( "C [mAh]" );
+  csv->addString(" ");
+  
+  csv->addString( "Umin/min [V]" );
+  csv->addString( "Umax/min [V]" );
+  csv->addString( "Imax/min [mA]" );
+  csv->addString( "Umin/total [V]" );
+  csv->addString( "Umax/total [V]" );
+  csv->addString( "Imax/total [mA]" );
+  csv->addString(" ");
+
+  csv->addString( "# of HPE" );
+  csv->addString( "HP time [s]" );
+  csv->addString( "HP C [mAh]" );
+  csv->addString( "HP E [mWh]" );
+  csv->addString( "last HP length [ms]" );
+  csv->addString( "avg HP length [ms]" );
+  csv->addString( "max HP length [ms]" );
+  csv->addString( "last HP Imax [mA]" );
+  csv->addString(" ");
+  
+  csv->addString( "LP time [s]" );
+  csv->addString( "LP C [mAh]" );
+  csv->addString( "LP E [mWh]" );
+  csv->addString( "last LP Imax [mA]" );
+
   csv->endLine();
 }
 

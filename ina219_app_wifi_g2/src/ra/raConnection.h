@@ -28,6 +28,7 @@ class raConnection
     raConnection( ConfigData * cd, raLogger* logger );
     int send( unsigned char * dataKOdeslani, int dataLen );
     int sendBlob( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension );
+    bool isConnected();
     
   private:
     void login();

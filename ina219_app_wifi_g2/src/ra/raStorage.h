@@ -68,6 +68,7 @@ class raStorage {
     int storeString( int priority, char * input_string );
 
     bool hasData();
+    int getUsage();
 
     void startReading();
     raStorageRecord* readNext();

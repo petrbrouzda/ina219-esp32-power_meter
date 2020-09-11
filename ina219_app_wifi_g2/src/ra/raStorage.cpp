@@ -321,3 +321,11 @@ void raStorageRecord::init( raLogger * logger, unsigned char * data_start )
   this->data_start = data_start;
 }
 
+int raStorage::getUsage()
+{
+    int rc = this->end_mark * 100 / this->capacity;
+    if( rc > 50 && rc < 100 ) {
+        rc++;
+    }
+    return rc;
+}

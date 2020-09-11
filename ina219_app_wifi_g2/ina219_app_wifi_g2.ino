@@ -9,6 +9,7 @@
  * - TFT_eSPI 2.2.14 (s upravou User_Config dle https://github.com/Xinyuan-LilyGO/TTGO-T-Display ! ) 
  * - Tasker 2.0.0 
  * - Adafruit_INA219 1.0.9
+ * - ArduinoJSON 5.13.5 (POZOR! Starsi nez aktualni verze!)
  * 
  * Kompilovano s ESP32 arduino core 1.0.4.
  */ 
@@ -81,9 +82,6 @@ long wifiStartTime = 0;
 
 // ma spustit wifi pri startu; ignoruje se pri MANAGE_WIFI = true
 #define RUN_WIFI_AT_STARTUP true
-
-// According to the ESP8266 SDK, you can only sleep for 4,294,967,295 µs, which is about ~71 minutes.
-#define DEEP_SLEEP_TIME_USEC 10e6
 
 // jmeno konfiguracniho souboru ve SPIFS
 #define CONFIG_FILE "/config2.json"
@@ -190,6 +188,7 @@ Menu * currentMenu;
  * 10 = coMerimMenu
  * 20 = rozliseniMenu
  * 30 = limit low/high
+ * 40 = zapisMenu
  * 100 = mereni
  * Nemenit primo, ale pres setAppState()!
  */
@@ -211,6 +210,11 @@ bool meteringPageChanged = true;
 bool saveData = true;
 
 /**
+ * Zaznamenat samostatne prechody do high power / low power?
+ */
+bool saveEvents = true;
+
+/**
  * CSV data
  */
 Csv * csv;
@@ -220,7 +224,10 @@ Csv * csv;
  */
 int meteringStart;
 
-#define CSV_USAGE_THRESHOLD 60
+/**
+ * Od jakeho obsazeni CSV se to snazi ulozit data na server?
+ */
+#define CSV_USAGE_THRESHOLD 90
 
 // -------- vnitrni stavy aplikace ---------------
 
@@ -236,10 +243,10 @@ void setAppState( int newState ) {
 void doComputeMinData()
 {
   if( saveData ) {
-    vals.write( csv );
-    /* Serial.printf( "csv size = %d %%\n---\n", csv->getUsage() );
-     Serial.println( csv->getContent() );
-     Serial.println( "---" ); */
+    vals.write( csv, " " );
+//     Serial.printf( "csv size = %d %%\n---\n", csv->getUsage() );
+//     Serial.println( csv->getContent() );
+//     Serial.println( "---" ); 
     if( csv->getUsage() > CSV_USAGE_THRESHOLD ) {
       saveCsv();
     }
@@ -260,7 +267,7 @@ void doMeter()
   
   long interval_ms = curTime - vals.lastMeteringTime;
 
-  vals.doCompute( coMerim, interval_ms, curTime, lowHighThreshold );
+  vals.doCompute( coMerim, interval_ms, curTime, lowHighThreshold, csv, saveEvents );
 }
 
 
@@ -351,6 +358,7 @@ void doPrint()
 Menu * hlavniMenu;
 Menu * coMerimMenu;
 Menu * rozliseniMenu;
+Menu * zapisMenu;
 
 
 // pozice polozek v menu - pro editaci hodnot z podrizenych obrazovek
@@ -370,7 +378,7 @@ void definujMenu()
   hlavniMenu->addItem( "Merim: Spotrebic", 10 );
   hlavniMenu->addItem( "Rozsah: 32V 2A", 20 );
   hlavniMenu->addItem( "Low/high: 5 mA", 30 );
-  hlavniMenu->addItem( "Zapis: ZAPNUTO", 102 );
+  hlavniMenu->addItem( "Zapis: Vse", 40 );
   hlavniMenu->addItem( "Vymazat pocitadla", 101 );
 
   coMerimMenu = new Menu( "Co merim" );
@@ -381,6 +389,11 @@ void definujMenu()
   rozliseniMenu->addItem( "32 V / 2 A", 21 );
   rozliseniMenu->addItem( "32 V / 1 A", 22 );
   rozliseniMenu->addItem( "16 V / 400 mA", 23 );
+
+  zapisMenu = new Menu( "Zapisovat" );
+  zapisMenu->addItem( "Vse", 31 );
+  zapisMenu->addItem( "1x za minutu", 32 );
+  zapisMenu->addItem( "Nezapisovat", 33 );
 }
 
 
@@ -396,7 +409,7 @@ void setup() {
   printMsg( TFT_WHITE, "Meric spotreby", "1.0+wifi", "... startuji ..." );
 
   //+++++ RatatoskrIoT +++++
-  ra = new ratatoskr( &config, 2000, LOG_MODE );
+  ra = new ratatoskr( &config, 500, LOG_MODE );
   logger = ra->logger;   
 
   // last parameter = should be wifi started on startup?
@@ -405,37 +418,10 @@ void setup() {
 
   //++++++ Custom code +++++
 
-  csv = new Csv( 50000, ',', ";" );
+  csv = new Csv( 100000, ',', ";" );
+  csv->setName( "consumption" );
   csv->beginHeader();
-  csv->addString( "t [s]" );
-  csv->addString( "U [V]" );
-  csv->addString( "I [mA]" );
-  csv->addString( "P [mW]" );
-  csv->addString( "C [mAh]" );
-  csv->addString(" ");
-  
-  csv->addString( "Umin/min [V]" );
-  csv->addString( "Umax/min [V]" );
-  csv->addString( "Imax/min [mA]" );
-  csv->addString( "Umin/total [V]" );
-  csv->addString( "Umax/total [V]" );
-  csv->addString( "Imax/total [mA]" );
-  csv->addString(" ");
-
-  csv->addString( "# of HPE" );
-  csv->addString( "HP time [ms]" );
-  csv->addString( "HP C [mAh]" );
-  csv->addString( "HP E [mWh]" );
-  csv->addString( "last HP length [ms]" );
-  csv->addString( "avg HP length [ms]" );
-  csv->addString( "max HP length [ms]" );
-  csv->addString(" ");
-  
-  csv->addString( "LP time [ms]" );
-  csv->addString( "LP C [mAh]" );
-  csv->addString( "LP E [mWh]" );
-
-  csv->endLine();
+  vals.writeHeader( csv );
   csv->endHeader();
 
   if (! ina219.begin()) {
@@ -581,6 +567,19 @@ void appStateMainMenu()
       drawLimitPg = true;
       delay( MENU_CHANGE_DELAY );
 
+    } else if( i==40 ) {
+      
+      currentMenu = zapisMenu;
+      zapisMenu->clearState();
+      int stav = 33;
+      if( saveData && saveEvents ) {
+        stav = 31;
+      } else if( saveData && !saveEvents ) {
+        stav = 32;
+      }
+      zapisMenu->setActive( stav );
+      delay( MENU_CHANGE_DELAY );
+
     } else if( i==100 ) {
       
       // spoustim mereni
@@ -590,7 +589,7 @@ void appStateMainMenu()
       // rovnou to zmerime a zobrazime na obrazovce, aby uzivatel necekal 1.5 sec na reakci
       doMeter();
       vals.resetMinuteData();
-      vals.write( csv );
+      vals.write( csv, " " );
       if( meteringStart == 0 ) {
         meteringStart = time(NULL);
       }
@@ -606,19 +605,10 @@ void appStateMainMenu()
       hlavniMenu->setPos(0);
       vals.resetCounters();
       meteringStart = time(NULL);
+      csv->setName( "consumption" );
       delay( MENU_CHANGE_DELAY );
 
-    } else if( i==102 ) {
-
-      // zmena stavu zapisovat/nezapisovat
-      saveData = !saveData;
-      setAppState( 1 );
-      hlavniMenu->clearState();
-      hlavniMenu->setPos(4);
-      hlavniMenu->updateText( HLAVNI_MENU_SAVE, saveData ? "Zapis: ZAPNUTO" : "Zapis: vypnuto" ); 
-      delay( MENU_CHANGE_DELAY );
-      
-    }
+    } 
   } // doslo k volbe!
 }
 
@@ -678,13 +668,49 @@ void appStateRozliseniMenu()
     delay( MENU_CHANGE_DELAY );
   } // doslo k volbe!  
 }
+      
+      
+void appStateZapisMenu()
+{
+  int i = zapisMenu->getResult();
+  if( i!=0 ) {
+    // doslo k volbe!
+
+    switch( i ) {
+      case 31: 
+          hlavniMenu->updateText( HLAVNI_MENU_SAVE, "Zapis: Vse" ); 
+          saveData = true;
+          saveEvents = true;
+          break;
+      case 32: 
+          hlavniMenu->updateText( HLAVNI_MENU_SAVE, "Zapis: Jen 1/min" ); 
+          saveData = true;
+          saveEvents = false;
+          break;
+      case 33: 
+          hlavniMenu->updateText( HLAVNI_MENU_SAVE, "Zapis: Vypnuto" ); 
+          saveData = false;
+          saveEvents = false;
+          break;
+    } // switch( i )
+
+    // navrat do hlavniho menu 
+    setAppState( 1 );
+    currentMenu = hlavniMenu;
+    hlavniMenu->setPos( HLAVNI_MENU_SAVE );
+    hlavniMenu->clearState();
+    delay( MENU_CHANGE_DELAY );
+  } // doslo k volbe!  
+}
 
 
 void appStateMenu()
 {
   switch( appState ) {
     case 1: 
+      // render vykresluje aktualni stav menu
       renderMenu();
+      // a obsluzna procedura pro state vyhodnocuje zmeny stavu (akce z klavesnice)
       appStateMainMenu(); 
       break;
     case 10: 
@@ -696,7 +722,12 @@ void appStateMenu()
       appStateRozliseniMenu(); 
       break;
     case 30: 
+      // appStateLimit obsahuje i render, nevola se samostatne
       appStateLimit(); 
+      break;
+    case 40: 
+      renderMenu();
+      appStateZapisMenu(); 
       break;
   }
 }
@@ -720,6 +751,21 @@ void appStateMereni()
          if( saveData ) {
             saveCsv();
          }
+         
+      } else if( ch=='r' ) {
+
+          // odesleme na server pracovni verzi dat
+          if( csv->hasData() ) {
+              wifiOK = checkWifiStatus();
+              if( wifiOK ) {
+                meteringPageChanged = true;
+                printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
+                if( 0 != ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)"temp_data", (char*)"csv" ) ) {         
+                    printMsg( TFT_RED, "Chyba", "pri", "odeslani" );    
+                    delay( 100 );
+                }
+              }
+          }
 
       } else if( ch=='u' ) {
         
@@ -752,8 +798,9 @@ void loop()
   if( appState==100 ) {
       appStateMereni();
   } else {
+      // obsahuje call checkWifiStatus()
+      saveCsv();
       appStateMenu();
-      wifiOK = checkWifiStatus();
   }
   
   delay(10);
@@ -763,16 +810,18 @@ void loop()
 
 void saveCsv()
 {
+  // je to tady a ne v loop(), protoze pri mereni se loop nevola
+  wifiOK = checkWifiStatus();
   if( ! csv->hasData() ) {
     return;
   }
-  wifiOK = checkWifiStatus();
   if( wifiOK ) {
     meteringPageChanged = true;
     printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
-    if( 0 == ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)"consumption", (char*)"csv" ) ) {
+    if( 0 == ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)csv->getName(), (char*)"csv" ) ) {
       Serial.println( "CSV sent" );
       csv->rewind();
+      csv->setName( "consumption_cont" );
       meteringStart = time(NULL);
     } else {
       Serial.println( "CSV not sent" );
@@ -801,6 +850,7 @@ void wifiStatus_StartingConfigPortal(  char * apName, char *apPassword, char * i
 void wifiStatus_Connected(  int status  )
 {
   // +++ user code here +++
+  ra->isConnected();
   // --- user code here ---
 }
 
@@ -847,3 +897,22 @@ bool wifiStatus_ShouldStartConfig()
   return digitalRead(CONFIG_BUTTON) == CONFIG_BUTTON_START_CONFIG;
 }
 //------------------------------------ callbacks from WiFi ---
+
+
+/*
+Použití knihovny FS ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\FS 
+Použití knihovny WiFi ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WiFi 
+Použití knihovny HTTPClient ve verzi 1.2 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\HTTPClient 
+Použití knihovny WiFiClientSecure ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WiFiClientSecure 
+Použití knihovny WebServer ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer 
+Použití knihovny DNSServer ve verzi 1.1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\DNSServer 
+Použití knihovny ArduinoJson ve verzi 5.13.5 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\ArduinoJson 
+Použití knihovny Tasker ve verzi 2.0 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Tasker 
+Použití knihovny Adafruit_INA219 ve verzi 1.0.9 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Adafruit_INA219 
+Použití knihovny Adafruit_BusIO ve verzi 1.4.1 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Adafruit_BusIO 
+Použití knihovny Wire ve verzi 1.0.1 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\Wire 
+Použití knihovny SPI ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\SPI 
+Použití knihovny TFT_eSPI ve verzi 2.2.14 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\TFT_eSPI 
+Použití knihovny SPIFFS ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\SPIFFS 
+ */
+ 

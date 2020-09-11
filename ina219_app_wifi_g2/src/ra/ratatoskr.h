@@ -6,6 +6,8 @@
 #include "raStorage.h"
 #include "raTelemetryPayload.h"
 
+#define RA_CORE_VERSION "2.2"
+
 // po chybe odesilani se nezkousi komunikovat po urcitou dobu
 #define RA_PAUSE_AFTER_ERR 15000
 
@@ -27,6 +29,8 @@ class ratatoskr
     void clearAllDataPrepared();
     bool isAllDataPrepared();
     void raDeepSleep( long usec );
+    bool isConnected();
+    int getStorageUsage();
     
   private:
     char * identity = (char*)"RA"; 
