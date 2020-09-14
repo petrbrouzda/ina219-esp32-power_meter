@@ -14,12 +14,13 @@ Csv::Csv( int size, char decimalPoint, const  char * delimiter )
     this->dataStart = 0;
     this->firstItem = true;
     this->data[ this->endPtr ] = 0;
-    this->name = "csv";
+    strcpy( this->name, "csv" );
 }
 
 void Csv::setName( const char * name )
 {
-    this->name = name;
+    strncpy( this->name, name, 64 );
+    this->name[64] = 0;
 }
 
 const char * Csv::getName()

@@ -230,10 +230,59 @@ int meteringStart;
 // -------- vnitrni stavy aplikace ---------------
 
 
+char tempName[64];
+
+char * createFileName( const char * append )
+{
+  const char * coMerimStr = coMerim==12 ? "source" : "load";
+  const char * rozliseniStr;
+  if( rozliseni==21 ) {
+    rozliseniStr = "32V-2A";
+  } else if( rozliseni==22 ) {
+    rozliseniStr = "32V-1A";
+  } else {
+    rozliseniStr = "16V-400mA";
+  }
+  
+  sprintf( tempName, "%s_%s_%.0fmA_%s", 
+    coMerimStr,
+    rozliseniStr,
+    lowHighThreshold,
+    saveEvents ? "Y" : "N" );
+
+  if( append!=NULL )
+  {
+    sprintf( tempName + strlen(tempName), "_%s", append );
+  }
+
+  return tempName;
+}
+
 
 void setAppState( int newState ) {
   Serial.printf( "appState = %d\n", newState );
   appState = newState;
+}
+
+void saveCsv()
+{
+  // je to tady a ne v loop(), protoze pri mereni se loop nevola
+  wifiOK = checkWifiStatus();
+  if( ! csv->hasData() ) {
+    return;
+  }
+  if( wifiOK ) {
+    meteringPageChanged = true;
+    printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
+    if( 0 == ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)csv->getName(), (char*)"csv" ) ) {
+      Serial.println( "CSV sent" );
+      csv->rewind();
+      csv->setName( createFileName("cont") );
+      meteringStart = time(NULL);
+    } else {
+      Serial.println( "CSV not sent" );
+    }
+  }  
 }
 
 
@@ -417,7 +466,7 @@ void setup() {
   //++++++ Custom code +++++
 
   csv = new Csv( 100000, ',', ";" );
-  csv->setName( "consumption" );
+  csv->setName( createFileName(NULL) );
   csv->beginHeader();
   vals.writeHeader( csv );
   csv->endHeader();
@@ -590,6 +639,7 @@ void appStateMainMenu()
       vals.write( csv, " " );
       if( meteringStart == 0 ) {
         meteringStart = time(NULL);
+        csv->setName( createFileName(NULL) );
       }
       doPrint();
       tasker.setInterval( doPrint, METERING_DISPLAY_REFRESH );
@@ -603,7 +653,7 @@ void appStateMainMenu()
       hlavniMenu->setPos(0);
       vals.resetCounters();
       meteringStart = time(NULL);
-      csv->setName( "consumption" );
+      csv->setName( createFileName(NULL) );
       delay( MENU_CHANGE_DELAY );
 
     } 
@@ -758,7 +808,7 @@ void appStateMereni()
               if( wifiOK ) {
                 meteringPageChanged = true;
                 printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
-                if( 0 != ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)"temp_data", (char*)"csv" ) ) {         
+                if( 0 != ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)createFileName("temp"), (char*)"csv" ) ) {         
                     printMsg( TFT_RED, "Chyba", "pri", "odeslani" );    
                     delay( 100 );
                 }
@@ -806,26 +856,6 @@ void loop()
 
 
 
-void saveCsv()
-{
-  // je to tady a ne v loop(), protoze pri mereni se loop nevola
-  wifiOK = checkWifiStatus();
-  if( ! csv->hasData() ) {
-    return;
-  }
-  if( wifiOK ) {
-    meteringPageChanged = true;
-    printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
-    if( 0 == ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)csv->getName(), (char*)"csv" ) ) {
-      Serial.println( "CSV sent" );
-      csv->rewind();
-      csv->setName( "consumption_cont" );
-      meteringStart = time(NULL);
-    } else {
-      Serial.println( "CSV not sent" );
-    }
-  }  
-}
 
 
 

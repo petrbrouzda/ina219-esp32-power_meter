@@ -29,7 +29,7 @@ class Csv
     const char * delimiter;
     bool firstItem;
     void addField( const char * s );
-    const char * name;
+    char name[65];
     
 };
 
