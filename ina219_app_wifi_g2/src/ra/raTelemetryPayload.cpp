@@ -74,6 +74,11 @@ raTelemetryPayload::raTelemetryPayload( raStorage * storage, int payloadSize, ra
   this->maxChannelId = 0;
   
   #ifdef ESP32
+        /*
+        Kesovani definice kanalu v RTC mem, aby se usetrily requesty.
+        Jen pro ESP32, to ma dost RTC mem.
+        U ESP8266 se vzdy posle vse.  
+        */
       if( rtcRaIndicator!=0xDEADFACE) {
           rtcRaIndicator = 0xDEADFACE;
           rtcChannelsSize = 0;

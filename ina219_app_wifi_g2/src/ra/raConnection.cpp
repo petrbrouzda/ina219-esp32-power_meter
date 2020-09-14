@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
 
 #include "../aes-sha/CRC32.h"
 
@@ -110,7 +109,7 @@ void random_block( BYTE * target, int size )
 /**
  * payload: 
  *      CRC32 of data (4 byte)
- *      length of data (1 byte)
+ *      length of data (2 byte, low endian)
  *      data
  */
 void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen )
@@ -121,8 +120,9 @@ void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen 
     btohexa( aes_iv, AES_BLOCKLEN, (char *)target, 130 );
     
     BYTE payload[RACONN_MAX_DATA+1];
-    payload[4] = sourceLen;
-    memcpy( payload+5, source, sourceLen );
+    payload[4] = (sourceLen>>8) & 0xff;
+    payload[5] = sourceLen & 0xff;
+    memcpy( payload+6, source, sourceLen );
     
     uint32_t crc1 = CRC32::calculate((const void*) source, sourceLen);
     payload[0] = (BYTE)( (crc1>>24) & 0xff);
@@ -130,7 +130,7 @@ void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen 
     payload[2] = (BYTE)( (crc1>>8) & 0xff);
     payload[3] = (BYTE)(crc1 & 0xff);
     
-    int celkovaDelka = sourceLen + 1 + 4;
+    int celkovaDelka = sourceLen + 2 + 4;
     int zbyva = AES_BLOCKLEN - (celkovaDelka % AES_BLOCKLEN);
     if( zbyva>0 ) {  
         random_block( payload+celkovaDelka, zbyva );
@@ -424,7 +424,9 @@ int sentLen;
 void sendBin( WiFiClient * client, uint8_t * data, size_t len )
 {
     sentLen += len;
-    //D/Serial.printf( "> %d .. %d\n", len , sentLen );
+    //D/
+    Serial.printf( "> %s\n", data );
+    Serial.printf( "> %d .. %d\n", len , sentLen );
     client->write( data, len );
 }
 
@@ -483,17 +485,21 @@ int parseDataLine( char * dataLine )
     }
 }
 
-int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension )
-{
-    this->logger->log( "%s BLOB", this->identity );
 
-    if( !this->connected ) {
-        this->login();
-    }
-    if( !this->connected ) {
-        return 1;           
-    }
-    
+void raConnection::log_keys( unsigned char * key, unsigned char * iv )
+{
+    char buff[256];
+    btohexa( key, AES_KEYLEN, (char*)buff, 100 );
+    int pos = AES_KEYLEN+AES_KEYLEN; 
+    buff[pos] = ' ';
+    btohexa( iv, AES_BLOCKLEN, (char*)buff+pos+1, 100 );
+    pos += 1 + AES_BLOCKLEN + AES_BLOCKLEN;
+    buff[pos] = 0;
+    this->logger->log( "key/iv %s", buff );      
+}
+
+int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension )
+{
     char server[200];
     char url[200];
     strcpy( server, this->cd->ra_url  );
@@ -541,6 +547,7 @@ int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, c
     if( (blobSize % BLOCKSIZE_PLAIN)!=0 ) { blobBlocks++; }
     int blobOutSize = (BLOCKSIZE_CIPHER+1)*blobBlocks;
     int totalLen = blobOutSize + beginSize + headerTextLen ;
+    sentLen = 0;
 
     WiFiClient client;
 
@@ -568,9 +575,12 @@ int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, c
 
     uint8_t *fbBuf = blob;
     for (size_t n=0; n<blobSize; n=n+BLOCKSIZE_PLAIN) {
-        //D/Serial.printf( "n=%d, size=%d\n",n, blobSize );
+        //D/
+        Serial.printf( "n=%d, size=%d\n",n, blobSize );
+        log_keys( (unsigned char*)this->sessionKey, (unsigned char*)aes_iv );
         if (n+BLOCKSIZE_PLAIN < blobSize) {
-            //D/Serial.println( "v1\n" );
+            //D/
+            Serial.println( "v1" );
             memcpy( binData, fbBuf, BLOCKSIZE_PLAIN );
             AES_init_ctx_iv(&ctx, (unsigned char const*)this->sessionKey, (unsigned char const*)aes_iv);
             AES_CBC_encrypt_buffer(&ctx, binData, BLOCKSIZE_PLAIN );
@@ -582,7 +592,8 @@ int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, c
         }
         else if (blobSize % BLOCKSIZE_PLAIN > 0) {
             size_t remainder = blobSize % BLOCKSIZE_PLAIN;
-            //D/Serial.printf( "v2 remainder=%d\n", remainder );
+            //D/
+            Serial.printf( "v2 remainder=%d\n", remainder );
             memcpy( binData, fbBuf, remainder );
             AES_init_ctx_iv(&ctx, (unsigned char const*)this->sessionKey, (unsigned char const*)aes_iv);
             AES_CBC_encrypt_buffer(&ctx, binData, BLOCKSIZE_PLAIN );
@@ -637,11 +648,35 @@ int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, c
         } // while (client.available()) {
     }
     client.stop();
+    
+    return rc;
+}
+
+int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension )
+{
+    this->logger->log( "%s BLOB+", this->identity );
+
+    if( !this->connected ) {
+        this->login();
+    }
+    if( !this->connected ) {
+        this->logger->log( "%s BLOB-ERR no login, no sendin'", this->identity );
+        return 1;           
+    }
+    
+    int rc = this->sendBlobInt( blob, blobSize, startTime, desc, extension );
+    if( rc>=400 ) {
+        this->logger->log( "%s BLOB ERR %d, reconnect", this->identity, rc );
+        this->login();
+        if( this->connected ) {
+            rc = this->sendBlobInt( blob, blobSize, startTime, desc, extension );               
+        }
+    }
 
     if( rc==0 ) {    
-        this->logger->log( "%s BLOB OK", this->identity );
+        this->logger->log( "%s BLOB-OK", this->identity );
     } else {
-        this->logger->log( "%s BLOB ERR %d", this->identity, rc );
+        this->logger->log( "%s BLOB-ERR %d", this->identity, rc );
     } 
     return rc;
 }

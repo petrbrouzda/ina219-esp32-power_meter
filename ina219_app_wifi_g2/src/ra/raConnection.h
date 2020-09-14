@@ -18,8 +18,8 @@
 
 #include "../aes-sha/sha256.h"
 
-#define RACONN_MAX_DATA 224
-#define RACONN_MSG_LEN 512
+#define RACONN_MAX_DATA 448
+#define RACONN_MSG_LEN 1024
 
 
 class raConnection 
@@ -35,6 +35,8 @@ class raConnection
     void createLoginToken( BYTE *target, long serverTime );
     void createDataPayload( BYTE *target, BYTE *source, int sourceLen );
     long readServerTime();
+    int sendBlobInt( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension );
+    void log_keys( unsigned char * key, unsigned char * iv );
     
     raLogger* logger;
     ConfigData * cd;
@@ -42,7 +44,7 @@ class raConnection
     char session[32];
     BYTE sessionKey[32];
     Sha256* sha256;
-    BYTE msg[RACONN_MSG_LEN];
+    BYTE msg[RACONN_MSG_LEN+10];
 
     char * identity = (char*)"CONN";    
 };

@@ -6,7 +6,7 @@
 #include "raStorage.h"
 #include "raTelemetryPayload.h"
 
-#define RA_CORE_VERSION "2.2"
+#define RA_CORE_VERSION "3.1"
 
 // po chybe odesilani se nezkousi komunikovat po urcitou dobu
 #define RA_PAUSE_AFTER_ERR 15000
@@ -23,7 +23,7 @@ class ratatoskr
     int defineChannel( int deviceClass, int valueType, char * deviceName, long msgRateSec ); 
     int postData( int channel, int priority, double value );
     int sendBlob( unsigned char * blob, int blobSize,  int startTime, char * desc, char * extension );
-    void process();
+    bool process();
     bool hasData();
     void setAllDataPrepared();
     void clearAllDataPrepared();

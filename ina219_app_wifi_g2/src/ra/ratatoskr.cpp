@@ -32,43 +32,58 @@ bool ratatoskr::hasData()
     return this->storage->hasData();
 }
 
-void ratatoskr::process()
+bool ratatoskr::process()
 {
     bool necoPoslano = false;
     
     if( (millis() - this->lastErrTime) < RA_PAUSE_AFTER_ERR ) {
-        return;
+        return false;
     }
     
     this->storage->startReading();
-    raStorageRecord* rec = storage->readNext();
-    while( rec!=NULL ) {
+    raStorageRecord* rec = this->storage->readNext();
+    if( rec!=NULL) {
+
         // je potreba pouzivat time(), protoze ten funguje na ESP32 v deep sleep!
         int nyni = time(NULL);
         
-        unsigned char data[256];
-        
+        unsigned char data[RACONN_MAX_DATA+10];
+        int maxLen = RACONN_MAX_DATA;
+        int pos = 0;
+        int len = 3;
+        int recs = 0;
+
         data[0] = (unsigned char)( (nyni >> 16) & 0xff );
         data[1] = (unsigned char)( (nyni >> 8) & 0xff );
         data[2] = (unsigned char)( nyni & 0xff );
-        memcpy( data+3, rec->data, rec->data_length );
+        pos = 3;
         
-        int len = rec->data_length + 3;
-        
-        if( 0 == conn->send( data, len ) ) {
+        while( rec!=NULL ) {
+            if( pos + rec->data_length + 2 >= maxLen ) {
+                break;
+            }
+            data[pos++] = rec->data_length;
+            memcpy( data+pos, rec->data, rec->data_length );
+            len += rec->data_length + 1;
+            pos += rec->data_length;
+            recs++;
+
             rec->markAsDeleted();
+            rec = this->storage->readNext();
+        }
+        data[pos++] = 0;
+
+        this->logger->log( "%s recs:%d len:%d", this->identity, recs, len );
+        if( 0 == conn->send( data, len ) ) {
             necoPoslano = true; 
+            this->storage->purgeDeleted();
         } else {
             this->logger->log( "%s not sent", this->identity );
             this->lastErrTime = millis();
-            break;
+            this->storage->undeleteAll();
         }
-        rec = this->storage->readNext();
     }
-    
-    if( necoPoslano ) {
-        this->storage->purgeDeleted();
-    }
+    return necoPoslano;
 }
 
 void ratatoskr::setAllDataPrepared()
