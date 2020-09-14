@@ -12,10 +12,8 @@
  * - ArduinoJSON 5.13.5 (POZOR! Starsi nez aktualni verze!)
  * 
  * Kompilovano s ESP32 arduino core 1.0.4.
- */ 
-/*
- * ESP 32:
- * - V Arduino IDE MUSI byt nastaveno rozdeleni flash tak, aby bylo alespon 1 M filesystemu SPIFS !
+ * 
+ * V Arduino IDE MUSI byt nastaveno rozdeleni flash tak, aby bylo alespon 1 M filesystemu SPIFS !
 */
 
 #include <FS.h>                   //this needs to be first, or it all crashes and burns...
