@@ -3,7 +3,7 @@
  */
 void printMsg( int color, const char * text1, const char * text2 )
 {
-  Serial.printf( "msg: '%s' '%s'", text1, text2 );
+  Serial.printf( "msg: '%s' '%s'\n", text1, text2 );
   
   tft.setRotation(3);
   tft.setTextSize(2);
