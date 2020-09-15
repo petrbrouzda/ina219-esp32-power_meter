@@ -4,14 +4,12 @@
 
   // ESP8266 libs
   #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
-  #include <ESPmDNS.h>
 
 #elif defined(ESP32)
 
   //ESP32
   #include <WiFi.h>
   #include <SPIFFS.h>
-  #include <ESPmDNS.h>
 
 #endif
 
@@ -283,22 +281,6 @@ bool isWifiOn()
 }
 
 
-void runMDns()
-{
-    char * p = strchr( config.ra_dev_name, ':' );
-    if( p==NULL ) {
-      p = config.ra_dev_name;
-    } else {
-      p++;
-    }
-    if (!MDNS.begin(p)) {             // Start the mDNS responder 
-        logger->log("Error setting up MDNS responder!");
-    } else {
-        logger->log( "~ mDNS [%s]", p );
-        MDNS.addService("ra-conn", "tcp", 80);
-    }
-}
-
 bool checkWifiStatus()
 {
   int newStatus;
@@ -314,7 +296,6 @@ bool checkWifiStatus()
       IPAddress ip = WiFi.localIP();
       logger->print( ip );
       wifiStatus_Connected( newStatus, ((millis()-lastConnected)/1000L), logger->printed );
-      runMDns();
     } else {
       if( wifiLastStatus==WL_CONNECTED ) {
         lastConnected = millis();

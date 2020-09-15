@@ -273,14 +273,20 @@ void saveCsv()
   }
   if( wifiOK ) {
     meteringPageChanged = true;
-    printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
-    if( 0 == ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)csv->getName(), (char*)"csv" ) ) {
-      Serial.println( "CSV sent" );
-      csv->rewind();
-      csv->setName( createFileName("cont") );
-      meteringStart = time(NULL);
-    } else {
-      Serial.println( "CSV not sent" );
+    // pokud se nepodari, zkusime to celkem 4x
+    for( int i = 0; i<4; i++ ) {
+      printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
+      if( 0 == ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)csv->getName(), (char*)"csv" ) ) {
+        Serial.println( "CSV sent" );
+        csv->rewind();
+        csv->setName( createFileName("cont") );
+        meteringStart = time(NULL);
+        break;
+      } else {
+        Serial.println( "CSV not sent" );
+        printMsg( TFT_RED, "Chyba", "pri", "odeslani" );    
+        delay( 250 );
+      }
     }
   }  
 }
@@ -810,7 +816,7 @@ void appStateMereni()
                 printMsg( TFT_WHITE, "Odesilam...", NULL, NULL );    
                 if( 0 != ra->sendBlob( (unsigned char*)csv->getContent(), csv->getSize(), meteringStart, (char*)createFileName("temp"), (char*)"csv" ) ) {         
                     printMsg( TFT_RED, "Chyba", "pri", "odeslani" );    
-                    delay( 100 );
+                    delay( 250 );
                 }
               }
           }
