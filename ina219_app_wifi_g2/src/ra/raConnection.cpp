@@ -413,29 +413,42 @@ void raConnection::login()
 }
 
 
+// #define BLOB_DETAIL_LOG
+
+/**
+ * Odesle jednu radku hlavicky na server
+ */ 
 void sendText( WiFiClient * client, char * data )
 {
-    //D/Serial.printf( "> %s\n", data  );
+    #ifdef BLOB_DETAIL_LOG
+        Serial.printf( "> %s\n", data  );
+    #endif
     client->println( data );
 }
 
 int sentLen;
 
+/**
+ * Odesle jednu radku payloadu na server
+ */ 
 void sendBin( WiFiClient * client, uint8_t * data, size_t len )
 {
     sentLen += len;
-    //D/
-    Serial.printf( "> %s\n", data );
-    Serial.printf( "> %d .. %d\n", len , sentLen );
+    #ifdef BLOB_DETAIL_LOG
+        Serial.printf( "> %s\n", data );
+        Serial.printf( "> %d .. %d\n", len , sentLen );
+    #endif
     client->write( data, len );
 }
-
 
 #define MAX_LINE_LEN 256
 char receivedLine[MAX_LINE_LEN+2];
 int pos = 0;
 bool lineComplete = false;
 
+/**
+ * Zpracovani odpovedi ze serveru - slozeni jednotlivych radek z prijatych znaku.
+ */ 
 void addChar( char c )
 {
     if( c=='\n' ) {
@@ -450,6 +463,9 @@ void addChar( char c )
     }
 }
 
+/**
+ * Vrati nactenou radku ze serveru
+ */ 
 char * getLine()
 {
     pos = 0;
@@ -461,6 +477,9 @@ char * getLine()
 #define BLOCKSIZE_PLAIN 512
 #define BLOCKSIZE_CIPHER 1024
 
+/**
+ * Parsuje radku s http statusem
+ */ 
 int parseStatusLine( char * statusLine )
 {
     char * p = strchr( statusLine, ' ' );
@@ -468,13 +487,16 @@ int parseStatusLine( char * statusLine )
         return -1;
     } 
     int status = atoi( p );
-    Serial.printf( "status=%d\n", status );
+    Serial.printf( "\nstatus=%d\n", status );
     if( status==200 ) {
         return 0;
     }
     return status;
 }
 
+/**
+ * Zpracuje radku s aplikacni odpovedi z RA
+ */ 
 int parseDataLine( char * dataLine )
 {
     if( strcmp(dataLine,"OK") == 0 ) {
@@ -485,7 +507,9 @@ int parseDataLine( char * dataLine )
     }
 }
 
-
+/**
+ * Zaloguje sifrovaci klic a IV
+ */ 
 void raConnection::log_keys( unsigned char * key, unsigned char * iv )
 {
     char buff[256];
@@ -498,6 +522,9 @@ void raConnection::log_keys( unsigned char * key, unsigned char * iv )
     this->logger->log( "key/iv %s", buff );      
 }
 
+/**
+ * Vlastni odeslani blobu; predpoklada, ze klient je prihlaseny.
+ */ 
 int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension )
 {
     char server[200];
@@ -575,12 +602,14 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
 
     uint8_t *fbBuf = blob;
     for (size_t n=0; n<blobSize; n=n+BLOCKSIZE_PLAIN) {
-        //D/
-        Serial.printf( "n=%d, size=%d\n",n, blobSize );
-        log_keys( (unsigned char*)this->sessionKey, (unsigned char*)aes_iv );
+        #ifdef BLOB_DETAIL_LOG
+            Serial.printf( "n=%d, size=%d\n",n, blobSize );
+            log_keys( (unsigned char*)this->sessionKey, (unsigned char*)aes_iv );
+        #endif
         if (n+BLOCKSIZE_PLAIN < blobSize) {
-            //D/
-            Serial.println( "v1" );
+            #ifdef BLOB_DETAIL_LOG
+                Serial.println( "v1" );
+            #endif
             memcpy( binData, fbBuf, BLOCKSIZE_PLAIN );
             AES_init_ctx_iv(&ctx, (unsigned char const*)this->sessionKey, (unsigned char const*)aes_iv);
             AES_CBC_encrypt_buffer(&ctx, binData, BLOCKSIZE_PLAIN );
@@ -592,8 +621,9 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
         }
         else if (blobSize % BLOCKSIZE_PLAIN > 0) {
             size_t remainder = blobSize % BLOCKSIZE_PLAIN;
-            //D/
-            Serial.printf( "v2 remainder=%d\n", remainder );
+            #ifdef BLOB_DETAIL_LOG
+                Serial.printf( "v2 remainder=%d\n", remainder );
+            #endif
             memcpy( binData, fbBuf, remainder );
             AES_init_ctx_iv(&ctx, (unsigned char const*)this->sessionKey, (unsigned char const*)aes_iv);
             AES_CBC_encrypt_buffer(&ctx, binData, BLOCKSIZE_PLAIN );
@@ -608,7 +638,8 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
     long startTimer = millis();
 
     /**
-     * 0 = cekam na status line
+     * Stavovy automat pro zpracovani vysledku. Vnitrni stavy:
+     * 0 = cekam na http status line
      * 1 = cekam na konec hlavicky
      * 2 = cekam na prvni radek dat
      * 3 = hotovo
@@ -652,6 +683,10 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
     return rc;
 }
 
+/**
+ * Odesle blob. Pokud neni prihlaseno, prihlasi.
+ * 0 = OK, jina hodnota = chyba; >=300 http result code.
+ */ 
 int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension )
 {
     this->logger->log( "%s BLOB+", this->identity );
