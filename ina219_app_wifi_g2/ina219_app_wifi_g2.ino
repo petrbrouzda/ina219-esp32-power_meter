@@ -875,9 +875,10 @@ void wifiStatus_StartingConfigPortal(  char * apName, char *apPassword, char * i
   // --- user code here ---
 }
 
-void wifiStatus_Connected(  int status  )
+void wifiStatus_Connected(  int status, int waitTime, char * ipAddress  )
 {
   // +++ user code here +++
+  logger->log( "* wifi connected, time: +%d s, IP: %s ", waitTime, ipAddress );
   ra->isConnected();
   // --- user code here ---
 }

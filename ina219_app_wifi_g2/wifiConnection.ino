@@ -295,9 +295,7 @@ bool checkWifiStatus()
     if( newStatus == WL_CONNECTED) {
       IPAddress ip = WiFi.localIP();
       logger->print( ip );
-      logger->log( "* wifi connected, time: +%d s, IP: %s ", ((millis()-lastConnected)/1000L), logger->printed );
-      
-      wifiStatus_Connected( newStatus );
+      wifiStatus_Connected( newStatus, ((millis()-lastConnected)/1000L), logger->printed );
     } else {
       if( wifiLastStatus==WL_CONNECTED ) {
         lastConnected = millis();
