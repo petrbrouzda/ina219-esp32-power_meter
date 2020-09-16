@@ -297,9 +297,6 @@ void doComputeMinData()
 {
   if( saveData ) {
     vals.write( csv, " " );
-//     Serial.printf( "csv size = %d %%\n---\n", csv->getUsage() );
-//     Serial.println( csv->getContent() );
-//     Serial.println( "---" ); 
     if( csv->getUsage() > CSV_USAGE_THRESHOLD ) {
       saveCsv();
     }
