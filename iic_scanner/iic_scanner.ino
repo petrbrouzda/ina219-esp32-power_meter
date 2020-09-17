@@ -4,6 +4,10 @@
 
 #include "Wire.h"
 
+#define I2C_SDA 25
+#define I2C_SCL 26
+
+
 void setup(){
   Serial.begin(115200); 
   while(!Serial){} // Waiting for serial connection
@@ -13,7 +17,9 @@ void setup(){
   Serial.print("\r\n");
   byte count = 0;
   
-  Wire.begin();
+    // https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/
+  Wire.begin(I2C_SDA, I2C_SCL);
+
   for (byte i = 8; i < 120; i++)
   {
     Wire.beginTransmission(i);

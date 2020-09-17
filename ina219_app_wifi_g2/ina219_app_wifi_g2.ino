@@ -142,6 +142,9 @@ long wifiStartTime = 0;
 #include "MenuPageRender.h"
 #include "Csv.h"
 
+#define I2C_SDA 25
+#define I2C_SCL 26
+
 /*
  * Definice jednotlivych tlacitek
  */
@@ -473,6 +476,9 @@ void setup() {
   csv->beginHeader();
   vals.writeHeader( csv );
   csv->endHeader();
+
+  // https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/
+  Wire.begin(I2C_SDA, I2C_SCL);
 
   if (! ina219.begin()) {
     printMsg( TFT_RED, "CHYBA", "Nevidim INA219.", NULL );

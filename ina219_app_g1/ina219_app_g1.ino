@@ -72,6 +72,10 @@
 #include "PrintMsg.h"
 #include "MenuPageRender.h"
 
+
+#define I2C_SDA 25
+#define I2C_SCL 26
+
 /*
  * Definice jednotlivych tlacitek
  */
@@ -81,6 +85,7 @@
 #define KEY_UP 2
 #define CORE_BUTTON_TOP  0
 #define CORE_BUTTON_DOWN 35
+
 
 Button buttonR = { KEY_RIGHT, HIGH, 0, 'r' };
 Button buttonL = { KEY_LEFT, HIGH, 0, 'l' };
@@ -291,6 +296,9 @@ void setup() {
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
+
+  // https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/
+  Wire.begin(I2C_SDA, I2C_SCL);
 
   if (! ina219.begin()) {
     printMsg( TFT_RED, "CHYBA", "Nevidim INA219." );
