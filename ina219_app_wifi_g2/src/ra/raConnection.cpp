@@ -201,7 +201,10 @@ int raConnection::send( unsigned char * dataKOdeslani, int dataLen )
     if( httpCode!=200 ) {
         // error description
         String payload = http.getString();
-        this->logger->log( "%s [%s]", this->identity, payload.c_str() );
+        char tmp[32];
+        strncpy( tmp, payload.c_str(), 31 );
+        tmp[31] = 0;
+        this->logger->log( "%s [%s]", this->identity, tmp );
     }
     http.end();
     

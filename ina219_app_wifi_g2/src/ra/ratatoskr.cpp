@@ -22,9 +22,20 @@ int ratatoskr::defineChannel( int deviceClass, int valueType, char * deviceName,
     return channel;
 }
 
+/**
+ * priority 1-15, higher is better
+ */
 int ratatoskr::postData( int channel, int priority, double value )
 {
     return this->telemetry->send( channel, priority, value );
+}
+
+/**
+ * priority 1-15, higher is better
+ */ 
+int ratatoskr::postImpulseData( int channel, int priority, long impulseTotalSum )
+{
+    return this->telemetry->sendImpulse( channel, priority, impulseTotalSum );
 }
 
 bool ratatoskr::hasData()
@@ -103,7 +114,7 @@ bool ratatoskr::isAllDataPrepared()
 
 void ratatoskr::raDeepSleep( long usec )
 {
-    this->logger->log( "deep sleep for %d sec, uptime %d msec", (usec/1000000), millis() );
+    this->logger->log( "deep sleep for %d sec, uptime %d msec, time %d sec", (usec/1000000), millis(), time(NULL) );
     ra__DeepSleep( usec );
 }
 

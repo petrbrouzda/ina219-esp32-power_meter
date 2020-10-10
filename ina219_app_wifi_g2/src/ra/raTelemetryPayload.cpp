@@ -2,6 +2,7 @@
 #include <stdlib.h> 
 #include "raTelemetryPayload.h"
 #include "../math/dtostrg.h"
+#include "../platform/platform.h"
 
 // #define LOG_DETAIL
 
@@ -72,6 +73,7 @@ raTelemetryPayload::raTelemetryPayload( raStorage * storage, int payloadSize, ra
   this->maxPayloadSize = payloadSize;
   this->data = (unsigned char *)malloc( maxPayloadSize + TPLD_HEADER_SIZE + 1 );
   this->maxChannelId = 0;
+  this->impulseDataSessionId = (trng()) & 0xffffff;
   
   #ifdef ESP32
         /*
@@ -216,6 +218,26 @@ int raTelemetryPayload::send( int channel, int priority, double value )
     dtostre( value, (char*)data, 6, 0 );
     
     // --- number to string conversion 
+    
+    // je potreba pouzivat time(), protoze ten funguje na ESP32 v deep sleep!
+    int rc = this->intStoreRecord( priority, channel, time(NULL), strlen((const char *)data), data );
+    if( rc == RA_NOT_STORED )
+    {
+        this->logger->log( "ERR cant store data" );
+    } else {  
+        //D                                                         
+        this->logger->log( "ch %d <= %s", channel, data ); 
+    } 
+    
+    return rc;
+}
+
+
+int raTelemetryPayload::sendImpulse( int channel, int priority, long value )
+{
+    unsigned char data[30];
+
+    sprintf( (char*)data, "%d;%x", value, this->impulseDataSessionId );
     
     // je potreba pouzivat time(), protoze ten funguje na ESP32 v deep sleep!
     int rc = this->intStoreRecord( priority, channel, time(NULL), strlen((const char *)data), data );

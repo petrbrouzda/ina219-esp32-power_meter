@@ -62,6 +62,7 @@ class raTelemetryPayload {
     int defineChannel( int deviceClass, int valueType, char * deviceName, long msgRateSec ); 
     
     int send( int channel, int priority, double value );
+    int sendImpulse( int channel, int priority, long value );
 
     int parseRecord( raStorageRecord * rec );
     int channel;
@@ -79,6 +80,7 @@ class raTelemetryPayload {
     unsigned char* data;
     raLogger* logger;
     char * identity = (char*)"TPLD";
+    int impulseDataSessionId;
 
 };
 

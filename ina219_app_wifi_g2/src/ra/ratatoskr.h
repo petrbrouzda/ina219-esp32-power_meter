@@ -6,7 +6,7 @@
 #include "raStorage.h"
 #include "raTelemetryPayload.h"
 
-#define RA_CORE_VERSION "3.1.1"
+#define RA_CORE_VERSION "3.2.1"
 
 // po chybe odesilani se nezkousi komunikovat po urcitou dobu
 #define RA_PAUSE_AFTER_ERR 15000
@@ -21,7 +21,16 @@ class ratatoskr
 
     ratatoskr( ConfigData * config, int storageSize, int logMode );
     int defineChannel( int deviceClass, int valueType, char * deviceName, long msgRateSec ); 
+
+    /**
+     * priority 1-15, higher is better
+     */
     int postData( int channel, int priority, double value );
+
+    /**
+     * priority 1-15, higher is better
+     */
+    int postImpulseData( int channel, int priority, long impulseTotalSum );
     int sendBlob( unsigned char * blob, int blobSize,  int startTime, char * desc, char * extension );
     bool process();
     bool hasData();
