@@ -659,7 +659,8 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
             if( lineComplete ) {
                 char * line = getLine();
                 if( status==0 ) {
-                    if( 0!=parseStatusLine( line ) ) {
+                    rc=parseStatusLine( line );
+                    if( rc!=0 ) {
                         status = 3;
                         break;
                     }
