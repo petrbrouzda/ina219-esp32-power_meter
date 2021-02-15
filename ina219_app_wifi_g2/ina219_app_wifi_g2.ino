@@ -16,80 +16,36 @@
  * V Arduino IDE MUSI byt nastaveno rozdeleni flash tak, aby bylo alespon 1 M filesystemu SPIFS !
 */
 
-#include <FS.h>                   //this needs to be first, or it all crashes and burns...
-
-#if defined(ESP8266)
-
-  // ESP8266 libs
-  #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
-  #include <DNSServer.h>
-  #include <ESP8266WebServer.h>
-
-#elif defined(ESP32)
-
-  //ESP32
-  #include <WiFi.h>
-  #include <HTTPClient.h>
-
-#endif
-
-// https://github.com/tzapu/WiFiManager 
-// patched version included in src/ folder
-#include "src/wifiman/WiFiManager.h"          
-
-// https://github.com/bblanchon/ArduinoJson 
-// import "ArduinoJSON" 5.13.5 in lib manager !!!
-#include <ArduinoJson.h>                    
-
-// ne-interrupt reseni planovani uloh
-// https://github.com/joysfera/arduino-tasker
-// import "Tasker" 2.0.0 in lib manager !!!
-#define TASKER_MAX_TASKS 7
-#include "Tasker.h"
-Tasker tasker; 
-
-
-
-
 //+++++ RatatoskrIoT +++++
 
-#include "ConfigData.h"
-#include "wifiConnection.h"
+  #include "AppConfig.h"
 
-// included in src/ folder
-#include "src/ra/ratatoskr.h"
-#include "src/platform/platform.h"
+  // RA objects
+  ratatoskr* ra;
+  raLogger* logger;
+  raConfig config;
+  Tasker tasker;
 
-// RA objects
-ratatoskr* ra;
-raLogger* logger;
-ConfigData config;
-bool wifiOK = false;
+  // stav WiFi - je pripojena?
+  bool wifiOK = false;
+  // cas, kdy byla nastartovana wifi
+  long wifiStartTime = 0;
+  // duvod posledniho startu, naplni se automaticky
+  int wakeupReason;
+  // je aktualni start probuzenim z deep sleep?
+  bool deepSleepStart;
 
-// cas, kdy byla nastartovana wifi; pokud se do N sekund po startu nepripoji a neposlou se data, muzeme je zahodit a jit do sleep mode
-long wifiStartTime = 0;
+  #ifdef RA_STORAGE_RTC_RAM 
+    RTC_DATA_ATTR unsigned char ra_storage[RA_STORAGE_SIZE];
+  #endif
 
-
-// konfigurace:
-
-// log mode muze byt RA_LOG_MODE_SERIAL nebo RA_LOG_MODE_NOLOG; ta druha je vhodna pro power-save rezim
-#define LOG_MODE RA_LOG_MODE_SERIAL
-
-// ma si spravovat wifi sam?
-#define MANAGE_WIFI false
-
-// ma spustit wifi pri startu; ignoruje se pri MANAGE_WIFI = true
-#define RUN_WIFI_AT_STARTUP true
-
-// jmeno konfiguracniho souboru ve SPIFS
-#define CONFIG_FILE "/config2.json"
-
-// heslo pro wifi konfiguracni AP; 8 chars or more!
-#define CONFIG_AP_PASSWORD "aaaaaaaa"
-
-// tlacitko UP
-#define CONFIG_BUTTON 2
-#define CONFIG_BUTTON_START_CONFIG LOW
+  #ifdef USE_BLINKER
+    raBlinker blinker( BLINKER_PIN );
+    int blinkerPortal[] = BLINKER_MODE_PORTAL;
+    int blinkerSearching[]  = BLINKER_MODE_SEARCHING;
+    int blinkerRunning[] = BLINKER_MODE_RUNNING;
+    int blinkerRunningWifi[] = BLINKER_MODE_RUNNING_WIFI;;
+  #endif  
 
 //----- RatatoskrIoT ----
 
@@ -450,6 +406,19 @@ void definujMenu()
 }
 
 
+void raAllWasSent()
+{
+  // v teto aplikaci se nepouziva
+}
+
+/**
+ * Vraci jmeno aplikace a jeji verzi do alokovaneho bufferu.
+ */
+void raGetAppName( char * target, int size )
+{
+  snprintf( target, size, "%s - %s %s", __FILE__, __DATE__, __TIME__ );
+  target[size-1] = 0;
+}
 
 
 
@@ -459,14 +428,13 @@ void setup() {
   while(!Serial) {}
 
   tft.init();
-  printMsg( TFT_WHITE, "Meric spotreby", "1.0+wifi", "... startuji ..." );
+  printMsg( TFT_WHITE, "Meric spotreby", "1.1+wifi", "... startuji ..." );
+  delay(300);
 
   //+++++ RatatoskrIoT +++++
-  ra = new ratatoskr( &config, 500, LOG_MODE );
-  logger = ra->logger;   
-
-  // last parameter = should be wifi started on startup?
-  connectConfig( CONFIG_FILE, CONFIG_AP_PASSWORD, MANAGE_WIFI ? false : RUN_WIFI_AT_STARTUP );
+    // Mel by byt jako prvni v setup().
+    // Pokud je parametr true, zapne Serial pro rychlost 115200. Jinak musi byt Serial zapnuty uz drive, nez je tohle zavolano.
+    ratatoskr_startup( false );
   //----- RatatoskrIoT ----
 
   //++++++ Custom code +++++
@@ -887,31 +855,18 @@ void wifiStatus_StartingConfigPortal(  char * apName, char *apPassword, char * i
 void wifiStatus_Connected(  int status, int waitTime, char * ipAddress  )
 {
   // +++ user code here +++
-  logger->log( "* wifi connected, time: +%d s, IP: %s ", waitTime, ipAddress );
-  ra->isConnected();
+  logger->log("* wifi [%s], %d dBm, %d s", ipAddress, WiFi.RSSI(), waitTime );
   // --- user code here ---
 }
 
 void wifiStatus_NotConnected( int status, long msecNoConnTime )
 {
   // +++ user code here +++
-  char * desc = (char*)"?";
-  char temp[32];
-  switch( status ) {
-    case WL_IDLE_STATUS:      desc = (char*)"IDLE"; break;                // ESP32,  = 0
-    case WL_NO_SSID_AVAIL:    desc = (char*)"NO_SSID"; break;             // WL_NO_SSID_AVAIL    = 1,
-    case WL_SCAN_COMPLETED:   desc = (char*)"SCAN_COMPL"; break;          // WL_SCAN_COMPLETED   = 2,
-    case WL_CONNECT_FAILED:   desc = (char*)"CONN_FAIL"; break;           // WL_CONNECT_FAILED   = 4,
-    case WL_CONNECTION_LOST:  desc = (char*)"CONN_LOST"; break;           // WL_CONNECTION_LOST  = 5,
-    case WL_DISCONNECTED:     desc = (char*)"DISC"; break;                // WL_DISCONNECTED     = 6
-    case WL_NO_SHIELD:        desc = (char*)"NO_SHIELD"; break;           // ESP32, = 255
-    case WIFI_POWER_OFF:      desc = (char*)"OFF"; break;
-    default: sprintf( temp, "%d", status ); desc = temp; break;
-  }
-  logger->log("* wifi not connected (%s) for %d s", desc, (msecNoConnTime/1000L) );
+    char desc[32];
+    getWifiStatusText( status, desc );
+    logger->log("* no wifi (%s), %d s", desc, (msecNoConnTime / 1000L) );
   // --- user code here ---
 }
-
 
 void wifiStatus_Starting()
 {
@@ -938,19 +893,5 @@ bool wifiStatus_ShouldStartConfig()
 
 
 /*
-Použití knihovny FS ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\FS 
-Použití knihovny WiFi ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WiFi 
-Použití knihovny HTTPClient ve verzi 1.2 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\HTTPClient 
-Použití knihovny WiFiClientSecure ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WiFiClientSecure 
-Použití knihovny WebServer ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer 
-Použití knihovny DNSServer ve verzi 1.1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\DNSServer 
-Použití knihovny ArduinoJson ve verzi 5.13.5 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\ArduinoJson 
-Použití knihovny Tasker ve verzi 2.0 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Tasker 
-Použití knihovny Adafruit_INA219 ve verzi 1.0.9 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Adafruit_INA219 
-Použití knihovny Adafruit_BusIO ve verzi 1.4.1 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\Adafruit_BusIO 
-Použití knihovny Wire ve verzi 1.0.1 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\Wire 
-Použití knihovny SPI ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\SPI 
-Použití knihovny TFT_eSPI ve verzi 2.2.14 v adresáři: C:\Users\brouzda\Documents\Arduino\libraries\TFT_eSPI 
-Použití knihovny SPIFFS ve verzi 1.0 v adresáři: C:\Users\brouzda\AppData\Local\Arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\SPIFFS 
  */
  

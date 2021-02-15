@@ -62,7 +62,11 @@ class raStorageIterator {
 
 class raStorage {
   public:
+    /** alokuje novou storage v RAM */
     raStorage( int capacity, raLogger* logger );
+
+    /** pouziva predalokovanou storage v RTC RAM - jen ESP32 */
+    raStorage( unsigned char * dataPtr, int blockSize, raLogger* logger );
 
     int storeData( int priority, int data_length, unsigned char * data );
     int storeString( int priority, char * input_string );
@@ -77,8 +81,11 @@ class raStorage {
     void undeleteAll();
     void purgeDeleted();
 
+    bool isRtcRamStorage();
+
   private:
-    
+
+    void initStorage();    
     int validateStoreData( int priority, int data_length );
 
     void intStartReading( raStorageIterator* iterator );
@@ -95,6 +102,11 @@ class raStorage {
     // iterators for user and for internal use
     raStorageIterator userIterator;
     raStorageIterator internalIterator;
+
+    // nasledujici blok se pouziva pro storage v RTC RAM
+    bool rtcRamStorage;
+    unsigned char * rtcDataPtr;
+    int rtcBlockSize;
 };
 
 

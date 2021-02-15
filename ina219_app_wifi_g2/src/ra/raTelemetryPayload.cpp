@@ -62,6 +62,8 @@
     }
 #endif    
 
+#define RA_RTCRAM_VALID_DATA_MARKER 0xdeadface
+
 
 /*
  * - payloadSize is max payload size (internal buffer size_)
@@ -81,8 +83,8 @@ raTelemetryPayload::raTelemetryPayload( raStorage * storage, int payloadSize, ra
         Jen pro ESP32, to ma dost RTC mem.
         U ESP8266 se vzdy posle vse.  
         */
-      if( rtcRaIndicator!=0xDEADFACE) {
-          rtcRaIndicator = 0xDEADFACE;
+      if( rtcRaIndicator!=RA_RTCRAM_VALID_DATA_MARKER) {
+          rtcRaIndicator = RA_RTCRAM_VALID_DATA_MARKER;
           rtcChannelsSize = 0;
           rtcChannels[0] = 0;
           rtcChannels[1] = 0;
@@ -164,41 +166,39 @@ int raTelemetryPayload::defineChannel( int deviceClass, int valueType, char * de
 #ifdef ESP32
     channel = raTplGetChannelFromCache( deviceName, logger );
     if( channel!=-1) {
-        this->logger->log( "cached channel %d for [%s]", channel, deviceName );
+        this->logger->log( "%s cached ch #%d for [%s]", this->identity, channel, deviceName );
+        return channel;
     }
 #endif
 
-    if( channel==-1 ) {
+    this->maxChannelId++;
+    channel = this->maxChannelId;
+        
+    int len = strlen( deviceName ); 
+    unsigned char chanDef[100];
+    chanDef[0] = deviceClass & 0xff;
+    chanDef[1] = valueType & 0xff;
+    chanDef[2] = (unsigned char)( (msgRateSec>>16) & 0xff );
+    chanDef[3] = (unsigned char)( (msgRateSec>>8) & 0xff );
+    chanDef[4] = (unsigned char)( msgRateSec & 0xff );
+    chanDef[5] = (unsigned char) this->maxChannelId;
+    chanDef[6] = len & 0xff;
+    strcpy( (char*)chanDef+CHANNEL_DEF_HDR_LEN, deviceName );
     
-        this->maxChannelId++;
-        channel = this->maxChannelId;
-         
-        int len = strlen( deviceName ); 
-        unsigned char chanDef[100];
-        chanDef[0] = deviceClass & 0xff;
-        chanDef[1] = valueType & 0xff;
-        chanDef[2] = (unsigned char)( (msgRateSec>>16) & 0xff );
-        chanDef[3] = (unsigned char)( (msgRateSec>>8) & 0xff );
-        chanDef[4] = (unsigned char)( msgRateSec & 0xff );
-        chanDef[5] = (unsigned char) this->maxChannelId;
-        chanDef[6] = len & 0xff;
-        strcpy( (char*)chanDef+CHANNEL_DEF_HDR_LEN, deviceName );
-        
-        if( RA_NOT_STORED == this->intStoreRecord( MAX_PRIORITY, CHANEL_DEFINE_CHANNEL, 0, CHANNEL_DEF_HDR_LEN+len, chanDef ) )
-        {
-            this->logger->log( "ERR cant store channel def" );
-            channel = -1;
-        } else {                                                           
-            this->logger->log( "channel %d for [%s]", channel, deviceName );
-        }
-        
-        #ifdef ESP32
-            rtcMaxChannelId = this->maxChannelId;
-            if( channel!=-1 ) {
-                raTplSaveChannelToCache( deviceName, channel, logger );
-            }
-        #endif
+    if( RA_NOT_STORED == this->intStoreRecord( MAX_PRIORITY, CHANEL_DEFINE_CHANNEL, 0, CHANNEL_DEF_HDR_LEN+len, chanDef ) )
+    {
+        this->logger->log( "%s ERR can't store channel def", this->identity  );
+        channel = -1;
+    } else {                                                           
+        this->logger->log( "%s ch #%d for [%s]", this->identity, channel, deviceName );
     }
+    
+    #ifdef ESP32
+        rtcMaxChannelId = this->maxChannelId;
+        if( channel!=-1 ) {
+            raTplSaveChannelToCache( deviceName, channel, logger );
+        }
+    #endif
     
     return channel;
 }
@@ -223,10 +223,10 @@ int raTelemetryPayload::send( int channel, int priority, double value )
     int rc = this->intStoreRecord( priority, channel, time(NULL), strlen((const char *)data), data );
     if( rc == RA_NOT_STORED )
     {
-        this->logger->log( "ERR cant store data" );
+        this->logger->log( "%s ERR data lost", this->identity );
     } else {  
         //D                                                         
-        this->logger->log( "ch %d <= %s", channel, data ); 
+        this->logger->log( "%s #%d <= %s", this->identity, channel, data ); 
     } 
     
     return rc;
@@ -243,10 +243,10 @@ int raTelemetryPayload::sendImpulse( int channel, int priority, long value )
     int rc = this->intStoreRecord( priority, channel, time(NULL), strlen((const char *)data), data );
     if( rc == RA_NOT_STORED )
     {
-        this->logger->log( "ERR cant store data" );
+        this->logger->log( "%s ERR can't store data", this->identity );
     } else {  
         //D                                                         
-        this->logger->log( "ch %d <= %s", channel, data ); 
+        this->logger->log( "%s #%d <= %s", this->identity, channel, data ); 
     } 
     
     return rc;
