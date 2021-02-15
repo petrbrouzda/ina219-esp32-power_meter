@@ -9,13 +9,18 @@ extern "C" {
     #include "../aes-sha/aes.h"
 }
 
+#include "../micro_ecc/uECC.h"
+
 #include "../platform/platform.h"
 #include "../platform/Esp8266RTCUserMemory.h"
 
 #include "raConnection.h"
 
-// konfigurace - mozno nedefinovat
+/* --- debug konfigurace - mozno povolit/zakazat -- */
+/* detailni logovani bezne komunikace: */
 // #define DETAILED_RA_LOG
+/* detailni logovani prace s bloby: */
+// #define BLOB_DETAIL_LOG
 
 
 #ifdef ESP32
@@ -25,20 +30,40 @@ extern "C" {
 #endif
 
 
-raConnection::raConnection( ConfigData * cd, raLogger* logger  )
+static int RNG(uint8_t *dest, unsigned size) {
+
+    while( size>=4 ) {
+        *((int*)dest) = trng();
+        size -= 4;
+        dest += 4;
+    }
+    while( size!=0 ) {
+        *dest = (unsigned char)( trng() & 0xff );
+        size--;
+        dest++;
+    }
+
+    return 1;
+}
+
+
+#define RAC_RTCMEM_MARKER 0xdeadface
+
+raConnection::raConnection( raConfig * cfg, raLogger* logger  )
 {
     this->logger = logger;
-    this->cd = cd;
+    this->cfg = cfg;
     this->connected = false;
     this->sha256=new Sha256();
+    strcpy( this->appName, "-" );
+    uECC_set_rng(&RNG);
     
-
     // pokud mame v RTC memory data o spojeni, nacteme je
     
     #ifdef ESP8266
         struct rtcData data;
         if( readRtcData( &data ) ) {
-            this->logger->log( "RTC data OK" );
+            this->logger->log( "RTC:OK" );
             memcpy( (void*)this->session, (const void *)(data.data), 32 );
             this->session[31] = 0;
             memcpy( (void*)this->sessionKey, (const void *)(data.data+32), 32 );
@@ -47,8 +72,8 @@ raConnection::raConnection( ConfigData * cd, raLogger* logger  )
     #endif
     
     #ifdef ESP32
-        if( rtcIndicator == 0xDEADFACE ) {
-            this->logger->log( "RTC data OK" );
+        if( rtcIndicator == RAC_RTCMEM_MARKER ) {
+            this->logger->log( "RTC:OK" );
             memcpy( (void*)this->session, (const void *)(rtcSessionId), 32 );
             this->session[31] = 0;
             memcpy( (void*)this->sessionKey, (const void *)(rtcSessionKey), 32 );
@@ -58,52 +83,11 @@ raConnection::raConnection( ConfigData * cd, raLogger* logger  )
 }
 
 
+#ifdef DETAILED_RA_LOG
+    #define LOG_BUFFER_LENGTH 100
+    char log_buffer[LOG_BUFFER_LENGTH+LOG_BUFFER_LENGTH+1];
+#endif
 
-
-#define LOG_BUFFER_LENGTH 100
-char log_buffer[LOG_BUFFER_LENGTH+LOG_BUFFER_LENGTH+1];
-
-unsigned char btohexa_high(unsigned char b)
-{
-    b >>= 4;
-    return (b>0x9u) ? b+87 : b+'0';     // 87 = 'a'-10
-}
-
-unsigned char btohexa_low(unsigned char b)
-{
-    b &= 0x0F;
-    return (b>9u) ? b+87 : b+'0';   // 87 = 'a'-10
-}
-
-void btohexa( unsigned char * bytes, int inLength, char * output, int outLength )
-{
-    char * out = output;
-    for( int i = 0; i<inLength && i<outLength; i++ )
-    {
-        *out = btohexa_high( bytes[i] );
-        out++;
-        *out = btohexa_low( bytes[i] );
-        out++;
-    }
-    *out = 0;
-}
-
-/**
- * Vygeneruje blok nahodnych bytes; delka musi byt delitelna 4!
- */
-void random_block( BYTE * target, int size )
-{
-    for( int i = 0; i<size;  ) {
-        
-        // definovano v platform/esp8266-trng.h platform/esp32-trng.h
-        long l = trng();
-            
-        target[i++] = (unsigned char)(l & 0xff);
-        target[i++] = (unsigned char)( (l>>8) & 0xff);
-        target[i++] = (unsigned char)( (l>>16) & 0xff);
-        target[i++] = (unsigned char)( (l>>24) & 0xff);
-    }
-}
 
 
 /**
@@ -119,12 +103,12 @@ void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen 
     // tohle neni debug, ale uz si konstruuji zpravu!
     btohexa( aes_iv, AES_BLOCKLEN, (char *)target, 130 );
     
-    BYTE payload[RACONN_MAX_DATA+1];
+    BYTE payload[RACONN_MAX_DATA+32+1];
     payload[4] = (sourceLen>>8) & 0xff;
     payload[5] = sourceLen & 0xff;
     memcpy( payload+6, source, sourceLen );
     
-    uint32_t crc1 = CRC32::calculate((const void*) source, sourceLen);
+    uint32_t crc1 = CRC32::calculate((unsigned char*) source, sourceLen);
     payload[0] = (BYTE)( (crc1>>24) & 0xff);
     payload[1] = (BYTE)( (crc1>>16) & 0xff);
     payload[2] = (BYTE)( (crc1>>8) & 0xff);
@@ -137,12 +121,12 @@ void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen 
     }
     
 #ifdef DETAILED_RA_LOG
-    this->logger->log( "delka %d, doplneni %d", celkovaDelka, zbyva );
+    this->logger->log( "  delka %d, doplneni %d", celkovaDelka, zbyva );
 
     btohexa( this->sessionKey, AES_KEYLEN, log_buffer, LOG_BUFFER_LENGTH );
-    this->logger->log( "session key: %s", log_buffer );
+    this->logger->log( "  session key: %s", log_buffer );
     
-    this->logger->log( "IV: %s", target );
+    this->logger->log( "  IV: %s", target );
 #endif        
 
     celkovaDelka = celkovaDelka + zbyva;
@@ -158,8 +142,53 @@ void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen 
     btohexa( payload, celkovaDelka, output_ptr, RACONN_MAX_DATA+RACONN_MAX_DATA );
     
 #ifdef DETAILED_RA_LOG
-    //this->logger->log( "out: %s", output_ptr );
+    this->logger->log( "  out: %s", output_ptr );
 #endif    
+}
+
+
+/**
+ * 0 = OK
+ * 1 = connection problem
+ * 2 = invalid session, reconect later 
+ */
+int raConnection::sendInt( unsigned char * dataKOdeslani, int dataLen )
+{
+    if( !this->connected ) {
+        this->login();
+    }
+    if( !this->connected ) {
+        return 1;           
+    }
+        
+    char url[256];
+    sprintf( url, "http://%s/data", this->cfg->getString( "ra_url", "???" ) );
+    
+    this->logger->log( "%s DATA", this->identity );
+    
+    sprintf( (char *)this->msg, "%s\n", 
+        this->session
+         );
+
+    BYTE* target = this->msg + strlen( (char *)this->msg ); 
+    //D/ this->logger->log( "%s pridavam %d byte payloadu na offset +%d do this->msg", this->identity, dataLen, strlen( (char *)this->msg ) );
+    this->createDataPayload( target, (BYTE*)dataKOdeslani, dataLen );
+    
+    int rc = this->doRequest( url, this->msg, strlen((char*)this->msg) );
+    
+    if( rc==0 ) {  
+        // 200
+        this->logger->log( "%s OK", this->identity );
+        return 0; 
+    } else if( rc==1 ) {  
+        // 403
+        this->logger->log( "%s http403 -> relogin", this->identity );
+        this->connected = false; 
+        return 2; 
+    } else {
+        this->logger->log( "%s httpERR", this->identity );
+        return 1;
+    }
 }
 
 
@@ -170,64 +199,21 @@ void raConnection::createDataPayload( BYTE *target, BYTE *source, int sourceLen 
  */
 int raConnection::send( unsigned char * dataKOdeslani, int dataLen )
 {
-    if( !this->connected ) {
-        this->login();
+    int rc = this->sendInt( dataKOdeslani, dataLen );
+    if( rc==2 ) {
+        // provedeme jeste jednou, tim dame sanci se prihlasit - to je nutne pri zmene konfigurace
+        rc = this->sendInt( dataKOdeslani, dataLen );
     }
-    if( !this->connected ) {
-        return 1;           
-    }
-        
-    char url[256];
-    sprintf( url, "http://%s/data", this->cd->ra_url );
-    
-    this->logger->log( "%s DATA", this->identity );
-    
-    sprintf( (char *)this->msg, "%s\n", 
-        this->session
-         );
 
-    BYTE* target = this->msg + strlen( (char *)this->msg ); 
-    this->createDataPayload( target, (BYTE*)dataKOdeslani, dataLen );
-    
-    
-    HTTPClient http;
-    http.begin( url );
-    http.addHeader("Content-Type", "application/octet-stream");
-    int httpCode = http.POST( (
-#ifdef ESP8266    
-            const 
-#endif            
-            uint8_t*)this->msg, strlen((char*)this->msg) );
-    if( httpCode!=200 ) {
-        // error description
-        String payload = http.getString();
-        char tmp[32];
-        strncpy( tmp, payload.c_str(), 31 );
-        tmp[31] = 0;
-        this->logger->log( "%s [%s]", this->identity, tmp );
-    }
-    http.end();
-    
-    // this->logger->log( "%s rc=%d [%s]", this->identity, httpCode, this->session );
-    this->logger->log( "%s rc=%d", this->identity, httpCode );
-
-    if( httpCode==403 ) {  
-        this->connected = false; 
-        return 2; 
-    }        
-    
-    if( httpCode==200 ) {  
-        return 0; 
-    }        
-    
-    return 1;
+    return rc;
 }
 
 
+/*
 long raConnection::readServerTime()
 {
     char url[256];
-    sprintf( url, "http://%s/time", this->cd->ra_url );
+    sprintf( url, "http://%s/time", this->cfg->getString( "ra_url", "???" ) );
     
     this->logger->log( "%s TIME", this->identity );
     
@@ -247,6 +233,7 @@ long raConnection::readServerTime()
         return l;
     }
 }
+*/
 
 
 
@@ -261,111 +248,220 @@ long raConnection::readServerTime()
 
 
 /**
- * Vygeneruje session key.
  * Z hesla sestavi sestavi sifrovaci klic pro login blok.
+ * Zasifruje s nim verejny klic
  * Vygeneruje cely payload blok pro login a zapise ho na vystupni adresu.
  */
-void raConnection::createLoginToken( BYTE *target, long serverTime )
+void raConnection::createLoginToken( BYTE *target, BYTE * ecdh_public )
 {
-    BYTE aes_key[AES_KEYLEN];
     BYTE aes_iv[AES_BLOCKLEN];
     
     this->sha256->init();
-    this->sha256->update((const BYTE *)this->cd->ra_pass, strlen((const char *)this->cd->ra_pass));
-    this->sha256->final(aes_key);
+    const char * pass = this->cfg->getString( "$ra_pass", "???" );
+    this->sha256->update((const BYTE *)pass, strlen((const char *)pass));
+    this->sha256->final(this->sessionKey);
     
-    random_block( (BYTE *)this->sessionKey, AES_KEYLEN );
     random_block( aes_iv, AES_BLOCKLEN );
     // tohle neni debug, ale uz si konstruuji zpravu!
     btohexa( aes_iv, AES_BLOCKLEN, (char *)target, 130 );
 
 #ifdef DETAILED_RA_LOG
-    this->logger->log( "password: %s", this->cd->ra_pass );
-    btohexa( aes_key, SHA256_BLOCK_SIZE, log_buffer, LOG_BUFFER_LENGTH );
-    this->logger->log( "password hash: %s", log_buffer );
+    this->logger->log( "  password: '%s'", this->cfg->getString( "$ra_pass", "???" ) );
+    btohexa( this->sessionKey, SHA256_BLOCK_SIZE, log_buffer, LOG_BUFFER_LENGTH );
+    this->logger->log( "  password hash: %s", log_buffer );
     
-    btohexa( this->sessionKey, AES_KEYLEN, log_buffer, LOG_BUFFER_LENGTH );
-    this->logger->log( "session key: %s", log_buffer );
-    
-    this->logger->log( "IV: %s", target );
+    this->logger->log( "  IV: %s", target );
 #endif        
     
-    int msgLen = AES_KEYLEN+AES_BLOCKLEN; 
-    BYTE msg[msgLen] ;
-    memcpy( msg, this->sessionKey, AES_KEYLEN );
-    
-    uint32_t crc1 = CRC32::calculate((const void*) this->sessionKey, AES_BLOCKLEN);
-    msg[AES_KEYLEN+0] = (BYTE)( (crc1>>24) & 0xff);
-    msg[AES_KEYLEN+1] = (BYTE)( (crc1>>16) & 0xff);
-    msg[AES_KEYLEN+2] = (BYTE)( (crc1>>8) & 0xff);
-    msg[AES_KEYLEN+3] = (BYTE)(crc1 & 0xff);
-    
-    uint32_t crc2 = CRC32::calculate((const void*) (this->sessionKey + AES_BLOCKLEN) , AES_BLOCKLEN );
-    msg[AES_KEYLEN+4] = (BYTE)( (crc2>>24) & 0xff);
-    msg[AES_KEYLEN+5] = (BYTE)( (crc2>>16) & 0xff);
-    msg[AES_KEYLEN+6] = (BYTE)( (crc2>>8) & 0xff);
-    msg[AES_KEYLEN+7] = (BYTE)(crc2 & 0xff);
-
-#ifdef DETAILED_RA_LOG
-    this->logger->log( "key CRC: %08.8x %08.8x", crc1, crc2 );
-#endif
-
-    msg[AES_KEYLEN+8] = (BYTE)( (serverTime>>24) & 0xff );
-    msg[AES_KEYLEN+9] = (BYTE)( (serverTime>>16) & 0xff );
-    msg[AES_KEYLEN+10] = (BYTE)( (serverTime>>8) & 0xff );
-    msg[AES_KEYLEN+11] = (BYTE)( (serverTime) & 0xff );
-    
-    random_block( msg+AES_KEYLEN+12, 4 ); 
+#define LOGIN_PAYLOAD_LEN 64
+    BYTE msg[LOGIN_PAYLOAD_LEN+1] ;
+    memcpy( msg, ecdh_public, LOGIN_PAYLOAD_LEN );
     
     struct AES_ctx ctx;
-    
-    AES_init_ctx_iv(&ctx, (unsigned char const*)aes_key, (unsigned char const*)aes_iv);
-    AES_CBC_encrypt_buffer(&ctx, (unsigned char *)msg, msgLen );
+    AES_init_ctx_iv(&ctx, (unsigned char const*)this->sessionKey, (unsigned char const*)aes_iv);
+    AES_CBC_encrypt_buffer(&ctx, (unsigned char *)msg, LOGIN_PAYLOAD_LEN );
 
+    // preskocime za IV
     char * output_ptr = (char *)target + AES_BLOCKLEN+AES_BLOCKLEN;
     output_ptr[0] = ':';
     output_ptr++;
-    btohexa( msg, msgLen, output_ptr, 100 );  // delka je // AES_KEYLEN+AES_KEYLEN+AES_BLOCKLEN+AES_BLOCKLEN +1;
+    btohexa( msg, LOGIN_PAYLOAD_LEN, output_ptr, LOGIN_PAYLOAD_LEN+LOGIN_PAYLOAD_LEN+1 );  
     
-#ifdef DETAILED_RA_LOG
-    this->logger->log( "out: %s", output_ptr );
-#endif    
 }
 
 
-//TODO: misto random bytes poslat time_t, ktere vrati server predeslym dotazem; tim se to ochrani proti replay utoku
+
+
+char * parserPtr;
+
+void textParser( char * text )
+{
+    parserPtr = text;
+}
+
 /**
- * Format login zpravy:
- *      <net_name>:<device_name>\n
- *      <login_paylod_block>\n
- *      
- * Format login_payload_block:
+ * Vrati do 'target' jednu radku ze vstupniho textu.
+ * Pred spustenim je treba zavolat textParser( source );
+ * Vraci true=neco nacteno, false=EOF
+ */  
+bool getNextLine( char * target, int targetSize )
+{
+    int targetPos = 0;
+    target[0] = 0;
+
+    while(1)
+    {
+        if( *parserPtr==0 ) {
+            if( targetPos==0 ) {
+                // jsme na konci a nic jsme nenacetli
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        if( *parserPtr==13 || *parserPtr==10 ) {
+            if( targetPos==0 ) {
+                // zatim jsme nic nenacetli, pokracujeme dal
+                parserPtr++;
+                continue;
+            } else {
+                return true;
+            }
+        }
+
+        if( targetPos < (targetSize-1) ) {
+            target[targetPos] = *parserPtr;
+            target[targetPos+1] = 0;
+            targetPos++;
+        }
+        parserPtr++;
+    }
+}
+
+/**
+ * Desifruje jeden prijaty balik v nasem formatu:
  *      <AES IV>:<AES_encrypted_data>
  * oboji zapsane jako retezec hexitu
  * 
- * Obsah AES_encrypted_data:
- *      <AES session key 32 byte><CRC32 z prvnich 16 byte klice><CRC32 z druhych 16 byte klice><server time 4 byte high endian><random data 4 byte>
- *      
-*/
-void raConnection::login() 
+ * Obsah plaintextu:
+ *      CRC32 of data (4 byte)
+ *      length of data (2 byte, low endian)
+ *      payload
+ * 
+ * Parametry:
+ *  encryptedData = vstupni data
+ *  plainText = buffer pro desifrovana data (reusing bufferu z nadrizene fce)
+ * 
+ * Vraci:
+ *  true = dekodovani OK
+ *  false = neco selhalo
+ */ 
+bool raConnection::decryptBlock( char * encryptedData, char * plainText, int plainTextBuffSize )
 {
-    char url[256];
-    sprintf( url, "http://%s/login", this->cd->ra_url );
-    
-    long serverTime = this->readServerTime();
-    if( serverTime==0 ) {
-        this->connected = false;
+    char * q = strchr( encryptedData, ':' );
+    if( q==NULL ) {
+        return false;
+    }
+    if( (q-encryptedData) != (AES_BLOCKLEN*2) ) {
+        this->logger->log( "%s spatny format, ':' @ %d, total=%d", this->identity, (q-encryptedData), strlen(encryptedData) );
+    }
+    *q = 0;
+    q++;
+
+    BYTE aes_iv[AES_BLOCKLEN+1];
+    hexatob( encryptedData, aes_iv, AES_BLOCKLEN );
+    hexatob( q, (BYTE*)plainText, plainTextBuffSize );
+
+    struct AES_ctx ctx;
+    AES_init_ctx_iv(&ctx, this->sessionKey, aes_iv );
+    AES_CBC_decrypt_buffer(&ctx, (unsigned char*)plainText, strlen(q)/2 );
+
+    uint32_t crcReceived = (plainText[0] << 24) | (plainText[1] << 16) | (plainText[2] << 8) | plainText[3];
+    int len = (plainText[4]<<8) | plainText[5];
+
+    plainText[len+6] = 0;
+
+    uint32_t crcComputed = CRC32::calculate((unsigned char*) plainText+6, len );
+
+    if( crcReceived != crcComputed ) {
+        this->logger->log( "%s cfg: CRC nesouhlasi moje:%x jejich:%x", this->identity, crcComputed, crcReceived );
+        return false;
+    }
+
+    return true;
+}
+
+
+void raConnection::decryptPublicKeyBlock( char * encryptedData, char * plainText, int plainTextBuffSize )
+{
+    char * q = strchr( encryptedData, ':' );
+    if( q==NULL ) {
+        this->logger->log( "%s spatny format dat" );
         return;
     }
-    
-    this->logger->log( "%s LOGIN", this->identity );
-    
-    sprintf( (char *)this->msg, "%s\n", 
-        this->cd->ra_dev_name );
+    if( (q-encryptedData) != (AES_BLOCKLEN*2) ) {
+        this->logger->log( "%s spatny format, ':' @ %d, total=%d", this->identity, (q-encryptedData), strlen(encryptedData) );
+    }
+    *q = 0;
+    q++;
 
-    BYTE* target = this->msg + strlen( (char *)this->msg ); 
-    this->createLoginToken( target, serverTime );
-        
+    BYTE aes_iv[AES_BLOCKLEN+1];
+    hexatob( encryptedData, aes_iv, AES_BLOCKLEN );
+    hexatob( q, (BYTE*)plainText, plainTextBuffSize );
+
+    struct AES_ctx ctx;
+    AES_init_ctx_iv(&ctx, this->sessionKey, aes_iv );
+    AES_CBC_decrypt_buffer(&ctx, (unsigned char*)plainText, strlen(q)/2 );
+}
+
+
+/**
+ * encryptedData = vstupni data
+ * plainText = buffer pro desifrovana data (reusing bufferu z nadrizene fce)
+ * oneLine = buffer pro jednu radku z desifrovanych dat (reusing bufferu z nadrizene fce)
+ */ 
+void raConnection::parseConfigData( char * encryptedData, char * plainText, int plainTextBuffSize, char * oneLine, int oneLineSize )
+{
+    if( ! decryptBlock( encryptedData, plainText, plainTextBuffSize ) ) {
+        return;
+    }
+
+    //D/ this->logger->log( "%s cfg pt [%s]", this->identity, plainText+6 );
+
+    // v p mame dekodovany string
+    // a v nem v p+6 je vlastni payload
+    textParser( plainText+6 );
+    if( getNextLine( oneLine, oneLineSize ) ) {
+        //D/ this->logger->log( "%s config ver [%s]", this->identity, oneLine );
+        int configVer = atol( oneLine );
+
+        while( getNextLine( oneLine, oneLineSize ) ) {
+            char *p = strchr( oneLine, '=' );
+            if( p!=NULL ) {
+                *p = 0;
+                p++;
+                //D/ 
+                this->logger->log( "%s cfg [%s]=[%s]", this->identity, oneLine, p );
+                this->cfg->setValue( oneLine, p );
+            }
+        }
+        sprintf( oneLine, "%d", configVer );
+        this->cfg->setValue( "@ver", oneLine );
+        this->logger->log( "%s new config %d", this->identity, configVer );
+    }
+}
+
+
+/**
+ * Provede http POST request, zaloguje vse potrebne a vrati:
+ * 0 = bylo http 200
+ * 1 = chyba 403
+ * 2 = jina chyba
+ * Vystupni data jsou v this->httpBuffer
+ */ 
+int raConnection::doRequest( char * url, unsigned char * postData, int postDataLen )
+{
     HTTPClient http;
     http.begin( url );
     http.addHeader("Content-Type", "application/octet-stream");
@@ -373,34 +469,183 @@ void raConnection::login()
 #ifdef ESP8266    
             const 
 #endif            
-            uint8_t*)this->msg, strlen((char*)this->msg) );
-    String payload = http.getString();
+            uint8_t*)postData, postDataLen );
+    String result = http.getString();
+    if( result.length() > RACONN_MSG_LEN ) {
+        this->logger->log( "%s WARN: res length %d - more than buffer %d !", this->identity, result.length(), RACONN_MSG_LEN );
+    }
+    strncpy( this->httpBuffer, result.c_str() , RACONN_MSG_LEN );
+    result = "";
+    this->httpBuffer[RACONN_MSG_LEN] = 0;
+    http.end();
+
+#ifdef DETAILED_RA_LOG
+    this->logger->log( "  %s << [%s]", this->identity, this->httpBuffer );
+#endif    
+
     if( httpCode!=200 ) {
         // error description
-        this->logger->log( "%s [%s]", this->identity, payload.c_str() );
+        this->logger->log( "%s [%s]", this->identity, this->httpBuffer );
+        return ( httpCode==403 ) ? 1 : 2;
     }
-    http.end();
+    return 0;
+}
+
+
+
+void raConnection::login() 
+{
+    /*
+    * Potrebuji tri buffery pro rozbaleni prichozi sifrovane odpovedi.
+    * - this->msg[RACONN_MSG_LEN 1024] byte pro vstupni sifrovany balik v hexa tvaru
+    * - url[URL_BUFFER_LEN 512] pro desifrovany balik
+    * - buff[BUFF_LEN 256] pro jednu radku odpovedi v sifrovanem bloku
+    * 
+    * Tj. cela zmena konfigurace muze mit maximalne 500 byte, a kazda radka (jmeno=hodnota) smi mit max 256 byte
+    */ 
+
+#define BUFF_LEN 256    
+    char buff[BUFF_LEN];
+
+#define URL_BUFFER_LEN 512
+    // aby se usetrila pamet, "url" se pouziva i na parsovani prijate sifrovane odpovedi
+    char url[URL_BUFFER_LEN+1];  
+    sprintf( url, "http://%s/logina", this->cfg->getString( "ra_url", "???" ) );
+    this->logger->log( "%s LOGINA", this->identity );
+
+
+    char ecdh_private[33];
+    char ecdh_public[65];
+    char remote_ecdh_public[65];
+    char ecdh_secret[33];
+    const struct uECC_Curve_t * curve = uECC_secp256k1();
+
+
+    // ---------------------------------------------------------------------------------
+    // logina
     
-    if( httpCode!=200 ) {  
+    uECC_make_key( (uint8_t*)ecdh_public, (uint8_t*)ecdh_private, curve);
+
+#ifdef DETAILED_RA_LOG    
+    btohexa( (unsigned char*)ecdh_private, 32, buff, 256 );
+    this->logger->log( "  ECDH private: %s", buff );
+    btohexa( (unsigned char*)ecdh_public, 64, buff, 256 );
+    this->logger->log( "  ECDH public: %s", buff );
+#endif 
+
+    sprintf( (char *)this->msg, "%s\n", 
+        this->cfg->getString( "ra_dev_name", "???" ) );
+
+    BYTE* target = this->msg + strlen( (char *)this->msg ); 
+    this->createLoginToken( target, (BYTE*)ecdh_public );
+
+#ifdef DETAILED_RA_LOG
+    this->logger->log( "out: '%s'", this->msg );
+#endif    
+       
+    int rc = this->doRequest( url, this->msg, strlen((char*)this->msg) );
+    if( rc ) {
         this->connected = false; 
         return;
     }
 
-    strncpy( this->session, payload.c_str(), 31 );
-    this->session[31] = 0;
-    char *p = strchr( this->session, '\n' );
-    if( p!=NULL ) { 
-        p[0]=0; 
+    // ----------------------------------------------
+    // prvni radek odpovedi = login msg id
+    textParser( (char*)this->httpBuffer );
+    if( ! getNextLine( (char*)this->session, 31 ) ) {
+        // ve vystupnim textu neni ani jedna radka textu
+        this->logger->log( "%s Neni zde nic 1.", this->identity );
+        return;
     }
 
-    this->logger->log( "%s rc=%d [%s]", this->identity, httpCode, this->session );
+#ifdef DETAILED_RA_LOG
+    this->logger->log( "  login msg id: %s", this->session );
+#endif    
+
+    if( ! getNextLine( (char*)this->msg, RACONN_MSG_LEN )  ) {
+        this->logger->log( "%s Neni zde nic 2.", this->identity );
+        return;
+    }
+    // v this->msg mame zasifrovany public klic protistrany
+    decryptPublicKeyBlock( (char*)this->msg, remote_ecdh_public, 65 );
+
+    int r = uECC_shared_secret( (uint8_t*)remote_ecdh_public, (uint8_t*)ecdh_private, (uint8_t*)ecdh_secret, curve );
+    if( !r ) {
+        this->logger->log( "chyba ECDH %d", r );
+        return;
+    }
+
+    this->sha256->init();
+    this->sha256->update((const BYTE *)ecdh_secret, 32 );
+    this->sha256->final(this->sessionKey);
+
+#ifdef DETAILED_RA_LOG    
+    btohexa( (unsigned char*)remote_ecdh_public, 64, buff, 256 );
+    this->logger->log( "  ECDH server public: %s", buff );
+    btohexa( (unsigned char*)ecdh_secret, 32, buff, 256 );
+    this->logger->log( "  ECDH secret: %s", buff );
+    btohexa( this->sessionKey, 32, buff, 256 );
+    this->logger->log( "  session key: %s", buff );    
+#endif 
+
+    // ---------------------------------------------------------------------------------
+    // loginb
+
+    sprintf( url, "http://%s/loginb", this->cfg->getString( "ra_url", "???" ) );
+    this->logger->log( "%s LOGINB", this->identity );
+
+    sprintf( (char *)this->msg, "%s\n", this->session );
+
+    target = this->msg + strlen( (char *)this->msg ); 
+
+    /*
+    <poslední síla signálu WiFi>\n
+    <uptime v sekundách>\n
+    <config file version>\n
+    <app name>
+    */
+    sprintf( buff, "%d\n%d\n%d\n%s",
+        this->wifiSignalStrength,
+        time(NULL),
+        this->localConfigVersion,
+        this->appName
+    );
+
+    this->createDataPayload( (BYTE*)target, (BYTE*)buff, strlen(buff) );
+
+    rc = this->doRequest( url, this->msg, strlen((char*)this->msg) );
+    if( rc ) {
+        this->connected = false; 
+        return;
+    }
+
+    textParser( (char*)this->httpBuffer );
+    // prvni radka = session ID
+    if( ! getNextLine( (char*)this->msg, RACONN_MSG_LEN ) ) {
+        // ve vystupnim textu neni ani jedna radka textu
+        this->logger->log( "%s Neni zde nic 3.", this->identity );
+        return;
+    }
+    if( ! decryptBlock( (char*)this->msg, url, URL_BUFFER_LEN ) ) {
+        return;
+    }
+    // v url je desifrovany blok, v url+6 je payload
+    strncpy( this->session, url+6, 31 );
+    this->session[31] = 0;
+
+    // ----------------------------------------------
+    // druhy radek odpovedi = zpracujeme zmeny konfigurace, pokud tam jsou
+    if( getNextLine( (char*)this->msg, RACONN_MSG_LEN )  ) {
+        // parseConfigData( char * encryptedData, char * plainText, int plainTextBuffSize, char * oneLine, int oneLineSize )
+        this->parseConfigData( (char*)this->msg, url, URL_BUFFER_LEN, buff, BUFF_LEN );
+    }
+
+    this->logger->log( "%s OK %s", this->identity, this->session );
 
     // mame session v this->session a klic v this->sessionKey
     this->connected = true;
     
-    
     // Ulozime si data o spojeni do RTC memory
-    
     #ifdef ESP8266
         struct rtcData data;
         memcpy( (void*)(data.data), (const void *)this->session, 32 );
@@ -411,12 +656,11 @@ void raConnection::login()
     #ifdef ESP32
         memcpy( (void*)(rtcSessionId), (const void *)this->session, 32 );
         memcpy( (void*)(rtcSessionKey), (const void *)this->sessionKey, 32 );
-        rtcIndicator = 0xDEADFACE;
+        rtcIndicator = RAC_RTCMEM_MARKER;
     #endif    
 }
 
 
-// #define BLOB_DETAIL_LOG
 
 /**
  * Odesle jednu radku hlavicky na server
@@ -515,6 +759,7 @@ int parseDataLine( char * dataLine )
  */ 
 void raConnection::log_keys( unsigned char * key, unsigned char * iv )
 {
+#ifdef BLOB_DETAIL_LOG
     char buff[256];
     btohexa( key, AES_KEYLEN, (char*)buff, 100 );
     int pos = AES_KEYLEN+AES_KEYLEN; 
@@ -523,6 +768,7 @@ void raConnection::log_keys( unsigned char * key, unsigned char * iv )
     pos += 1 + AES_BLOCKLEN + AES_BLOCKLEN;
     buff[pos] = 0;
     this->logger->log( "key/iv %s", buff );      
+#endif
 }
 
 /**
@@ -530,9 +776,11 @@ void raConnection::log_keys( unsigned char * key, unsigned char * iv )
  */ 
 int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension )
 {
+    long start = millis();
+    
     char server[200];
     char url[200];
-    strcpy( server, this->cd->ra_url  );
+    strcpy( server, this->cfg->getString( "ra_url", "???" ) );
     char * p = strchr( server, '/' );
     if( p==NULL ) { return 1; }
     strcpy(url, p);
@@ -584,6 +832,8 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
     if (! client.connect(server, 80)) {
         Serial.println("Connect failed.");
         return 2;
+    } else {
+        Serial.println("Connected" );
     }
 
     char buf[256];
@@ -603,8 +853,13 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
 
     unsigned char binData[BLOCKSIZE_PLAIN+2];
 
+    Serial.printf( "len %d kB\n", blobSize/1024 );
+
     uint8_t *fbBuf = blob;
     for (size_t n=0; n<blobSize; n=n+BLOCKSIZE_PLAIN) {
+        if( n % 10240 == 0 ) {
+            Serial.printf( "%d kB  ", n/1024 );
+        }
         #ifdef BLOB_DETAIL_LOG
             Serial.printf( "n=%d, size=%d\n",n, blobSize );
             log_keys( (unsigned char*)this->sessionKey, (unsigned char*)aes_iv );
@@ -637,7 +892,7 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
         }
     }   
 
-    int timeoutTimer = 30000;
+    int timeoutTimer = RA_BLOB_TIMEOUT;
     long startTimer = millis();
 
     /**
@@ -649,6 +904,8 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
      */
     int status = 0;
     int rc = 3;
+
+    Serial.println("");
 
     while( (status!=3) && (startTimer + timeoutTimer) > millis() ) {
         Serial.print(".");
@@ -684,6 +941,8 @@ int raConnection::sendBlobInt( unsigned char * blob, int blobSize, int startTime
     }
     client.stop();
     
+    Serial.printf( "BLOB %d s\n", ((millis()-start)/1000) );
+    
     return rc;
 }
 
@@ -704,7 +963,7 @@ int raConnection::sendBlob( unsigned char * blob, int blobSize, int startTime, c
     }
     
     int rc = this->sendBlobInt( blob, blobSize, startTime, desc, extension );
-    if( rc>=400 ) {
+    if( rc!=0 ) {
         this->logger->log( "%s BLOB ERR %d, reconnect", this->identity, rc );
         this->login();
         if( this->connected ) {
@@ -734,4 +993,20 @@ bool raConnection::isConnected()
         return false;           
     }
     return true;
+}
+
+void raConnection::setAppName( const char * appName )
+{
+    strncpy( this->appName, appName, RA_APP_NAME_SIZE );
+    this->appName[RA_APP_NAME_SIZE] = 0;
+}
+
+void raConnection::setConfigVersion( int version )
+{
+    this->localConfigVersion = version;
+}
+
+void raConnection:: setRssi( int rssi )
+{
+    this->wifiSignalStrength = rssi;
 }

@@ -1,5 +1,3 @@
-#include <FS.h>                   //this needs to be first, or it all crashes and burns...
-
 #if defined(ESP8266)
 
   // ESP8266 libs
@@ -40,6 +38,7 @@ long wifiPoweredOnMsec = 0;
 long wifiPoweredOffMsec = 0;
 long lastWifiStatusChangeMsec = 0;
 
+raConfig * wifi_config;
 
 //gets called when WiFiManager enters configuration mode
 void configModeCallback (WiFiManager *myWiFiManager) {
@@ -51,47 +50,7 @@ void saveConfigCallback () {
   shouldSaveConfig = true;
 }
 
-
-void readConfigFromFile( const char * fileName )
-{
-  // true na ESP32 = format on fail. Bez toho neprobehne prvotni incializace u ESP-32.
-  // na ESP8266 parametr neni
-  if (! SPIFFS.begin(
-#ifdef ESP32    
-      true
-#endif
-  )) {
-    logger->log("@ failed to mount FS, nastavte rozdeleni flash, aby tam bylo alespon 1M SPIFS");
-    return;
-  }
-   
-  if (! SPIFFS.exists(  fileName )) {
-    logger->log("@ config file not found: %s", fileName);
-    return;
-  }
-  
-  File configFile = SPIFFS.open( fileName, "r");
-  if( !configFile) {
-    logger->log("@ problem opening config file: %s", fileName);
-    return; 
-  }
-
-  // Allocate a buffer to store contents of the file.
-  size_t size = configFile.size();
-  std::unique_ptr<char[]> buf(new char[size]);
-
-  configFile.readBytes(buf.get(), size);
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& json = jsonBuffer.parseObject(buf.get());
-
-  if(! json.success()) {
-    logger->log("@ failed to parse JSON config");
-    return;
-  }
-  
-  config.readFromJson( json );
-  logger->log("@ config loaded");
-}
+const char * wifi_ssid;
 
 
 void displayWifiStats( long lastCycle ) 
@@ -108,7 +67,7 @@ void displayWifiStats( long lastCycle )
 
     if( wifiPoweredOn ) {
       logger->log( "~ wifi: ON [%s], on %d s, off %d s, usage %d %%, uptime %d s%s", 
-                    config.ssid,
+                    wifi_ssid,
                     (wifiPoweredOnMsec/1000), 
                     (wifiPoweredOffMsec/1000), 
                     percent,
@@ -131,22 +90,29 @@ void displayWifiStats( long lastCycle )
 void startWifi()
 {
     if( wifiPoweredOn ) return;
+
+#ifdef USE_BLINKER
+    blinker.setCode( blinkerSearching );
+#endif     
     
     wifiPoweredOn = true;
     lastConnected = millis();
-    
+
     // logger->log("* wifi connecting [%s]", config.ssid );
     WiFi.persistent(false);
     WiFi.softAPdisconnect(true);  // https://stackoverflow.com/questions/39688410/how-to-switch-to-normal-wifi-mode-to-access-point-mode-esp8266
                                   // https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/soft-access-point-class.html#softapdisconnect
     WiFi.disconnect(); 
-    WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_STA); // sezere 50 kB RAM
     WiFi.disconnect(); 
-    WiFi.begin( config.ssid, config.pass );
+    wifi_ssid = config.getString("wifi_ssid","");
+    WiFi.begin( wifi_ssid, config.getString("$wifi_pass","") );
 
     long curTime = millis();
     wifiPoweredOffMsec += curTime - lastWifiStatusChangeMsec;
     lastWifiStatusChangeMsec = curTime;
+
+    wifiLastStatus = WL_DISCONNECTED;
     displayWifiStats( 0 );
     
     wifiStatus_Starting();
@@ -170,21 +136,18 @@ void stopWifi()
     displayWifiStats( lastCycle );
 }
 
-void connectConfig( const char * fileName, const char * configApPass, bool runWifiOnStartup )
+void networkConfig( const char * configApPass, bool runWifiOnStartup )
 {
   WiFi.persistent(false);
   
   wifiLastStatus = -1;
   shouldSaveConfig = false;
-  
-  readConfigFromFile( fileName );
 
   bool connResult = false;
   bool startPortal = false;
-
   
   // pokud neni validni konfigurace NEBO pokud uzivatel stiskne tlacitko, spustime config portal
-  if( (!config.isValid()) || wifiStatus_ShouldStartConfig() )
+  if( (!isConfigValid(&config)) || wifiStatus_ShouldStartConfig() )
   {
       //WiFiManager
       //Local intialization. Once its business is done, there is no need to keep it around
@@ -201,11 +164,11 @@ void connectConfig( const char * fileName, const char * configApPass, bool runWi
     
       //+++CONFIG+++ custom parameters for WifiManager --------------------------------------------------
           // id/name, placeholder/prompt, default, length
-          WiFiManagerParameter custom_text1("<p>RA URL, net ID, device name and passphrase.</p>");
+          WiFiManagerParameter custom_text1("<p>RA URL, device name and passphrase.</p>");
           wifiManager.addParameter(&custom_text1);
-          WiFiManagerParameter custom_net_url("net_url", "RA URL (without http://)", config.ra_url, 63);
+          WiFiManagerParameter custom_net_url("net_url", "RA URL (without http://)", config.getString("ra_url",""), 63);
           wifiManager.addParameter(&custom_net_url);
-          WiFiManagerParameter custom_dev_name("dev_name", "RA device name", config.ra_dev_name, 31);
+          WiFiManagerParameter custom_dev_name("dev_name", "RA device name", config.getString("ra_dev_name",""), 31);
           wifiManager.addParameter(&custom_dev_name);
           // password will not be shown - default value is not set
           WiFiManagerParameter custom_pass("ra_pass", "RA passphrase", "", 31);
@@ -213,17 +176,8 @@ void connectConfig( const char * fileName, const char * configApPass, bool runWi
       //--CONFIG--- custom parameters for WifiManager ----------------------------------------------------  
 
       char apName[20];
-
-#ifdef ESP8266
-      sprintf( apName, "RA_%d", ESP.getChipId() );
-#endif
-
-#ifdef ESP32
-      uint64_t macAddressTrunc = ((uint64_t)ESP.getEfuseMac()) << 40;
-      long chipId = macAddressTrunc >> 40;
-      sprintf( apName, "RA_%d", chipId );
-      // sprintf( apName, "RA_%d_%d", chipId, (esp_random() & 0xffff) );
-#endif
+      strcpy( apName, "RA_" );
+      raGetDeviceId( apName + strlen(apName) );
 
       wifiStatus_StartingConfigPortal(  apName, (char*)configApPass, (char*)"10.0.1.1"  );
       wifiManager.startConfigPortal(  apName, configApPass  );
@@ -231,27 +185,16 @@ void connectConfig( const char * fileName, const char * configApPass, bool runWi
       if( shouldSaveConfig ) {
           
           //+++CONFIG+++ custom parameters for WifiManager --------------------------------------------------
-              strcpy( config.ssid, wifiManager.getSsid() );
-              strcpy( config.pass, wifiManager.getPassword() );
-              strcpy( config.ra_url, custom_net_url.getValue());
-              strcpy( config.ra_dev_name, custom_dev_name.getValue());
-              strcpy( config.ra_pass, custom_pass.getValue());
+              config.setValue( "wifi_ssid", wifiManager.getSsid() );
+              config.setValue( "$wifi_pass", wifiManager.getPassword() );
+              config.setValue( "ra_url", custom_net_url.getValue());
+              config.setValue( "ra_dev_name", custom_dev_name.getValue());
+              config.setValue( "$ra_pass", custom_pass.getValue());
           //--CONFIG--- custom parameters for WifiManager ----------------------------------------------------
-      
-          logger->log("saving config");
-          DynamicJsonBuffer jsonBuffer;
-          JsonObject& json = jsonBuffer.createObject();
-          config.saveToJson( json );
-      
-          File configFile = SPIFFS.open( fileName, "w");
-          if (!configFile) {
-            logger->log("failed to write config file");
-          } else {
-            json.printTo(configFile);
-            configFile.close();
-            logger->log("config saved");
-          }
-          //end save
+
+          // vypis upravene konfigurace:
+          // config.printTo( Serial );
+          saveConfig( &config );
       }
 
       stopWifi();
@@ -262,15 +205,23 @@ void connectConfig( const char * fileName, const char * configApPass, bool runWi
    wifiPoweredOn = false;
    
    if( runWifiOnStartup ) {
+
       startWifi();
+      
    } else {
+
+#ifdef USE_BLINKER
+      blinker.setCode( blinkerRunning );
+#endif     
+    
       WiFi.mode( WIFI_OFF );
       #ifdef ESP8266
         WiFi.forceSleepBegin();
       #endif    
+      wifiLastStatus = WIFI_POWER_OFF;
       checkWifiStatus();
    }
-  
+
 } // void connectWifiOrStartManager( const char * fileName )
 
 
@@ -290,17 +241,34 @@ bool checkWifiStatus()
       newStatus = WIFI_POWER_OFF;
   }
 
+  // aby nam to pri spousteni neslo pres dva stavy
+  if( newStatus == WL_IDLE_STATUS ) {
+    newStatus = WL_DISCONNECTED;
+  }
+
   if( wifiLastStatus!=newStatus )
   {
     if( newStatus == WL_CONNECTED) {
+
+      ra->conn->setRssi( WiFi.RSSI() );
+
       IPAddress ip = WiFi.localIP();
       logger->print( ip );
+#ifdef USE_BLINKER
+      blinker.setCode( blinkerRunningWifi );
+#endif 
       wifiStatus_Connected( newStatus, ((millis()-lastConnected)/1000L), logger->printed );
+      
     } else {
+      
       if( wifiLastStatus==WL_CONNECTED ) {
         lastConnected = millis();
       }
+#ifdef USE_BLINKER
+      blinker.setCode( blinkerRunning );
+#endif 
       wifiStatus_NotConnected( newStatus, millis()-lastConnected );
+      
     }
     
     wifiLastStatus=newStatus;
@@ -311,14 +279,14 @@ bool checkWifiStatus()
     long notConn = (millis()-lastConnected)/1000L;
     if( notConn>WIFI_NOCONN_RESTART_SEC ) {
       // restartovat wifi, kdyz se strasne dlouho nepripojilo
-      logger->log("* wifi not connected for %d s, restarting for [%s]", notConn, config.ssid );
+      logger->log("* wifi not connected for %d s, restarting for [%s]", notConn, wifi_ssid );
 
 #ifdef ESP8266      
       ETS_UART_INTR_DISABLE();
       wifi_station_disconnect();
       ETS_UART_INTR_ENABLE();
       WiFi.persistent(false);
-      WiFi.begin(config.ssid, config.pass);
+      WiFi.begin( wifi_ssid, config.getString("$wifi_pass","") );
 #endif
 
 #ifdef ESP32

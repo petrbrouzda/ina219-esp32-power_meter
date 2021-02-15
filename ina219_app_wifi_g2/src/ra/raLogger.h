@@ -39,8 +39,8 @@
 /*
  * Internal buffer for log messages
  */
-#define RA_BUFFER_SIZE 150
-#define RA_PRINT_BUFFER_SIZE 50
+#define RA_BUFFER_SIZE 500
+#define RA_PRINT_BUFFER_SIZE 100
 
 
 

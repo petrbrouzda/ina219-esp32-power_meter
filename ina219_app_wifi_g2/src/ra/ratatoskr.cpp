@@ -2,24 +2,48 @@
 #include "../platform/platform.h"
 
 
-ratatoskr::ratatoskr( ConfigData * config, int storageSize, int logMode  )
+ratatoskr::ratatoskr( raConfig * config, int logMode  )
 {
     this->logger = new raLogger( logMode );
     this->conn = new raConnection( config, this->logger );
-    this->storage = new raStorage( storageSize, this->logger );
-    this->telemetry = new raTelemetryPayload( this->storage, RACONN_MAX_DATA, this->logger );
+    this->storage = NULL;
+    this->telemetry = NULL;
     this->lastErrTime = -2 * RA_PAUSE_AFTER_ERR;
     this->allDataPrepared = false;
-    
+}
+
+void ratatoskr::createStorage(  int storageSize )
+{
+    this->storage = new raStorage( storageSize, this->logger );
+    this->telemetry = new raTelemetryPayload( this->storage, RACONN_MAX_DATA, this->logger );
+}
+
+#ifdef ESP32
+    void ratatoskr::createRtcRamStorage( unsigned char * dataPtr, int blockSize )
+    {
+        this->storage = new raStorage( dataPtr, blockSize, this->logger );
+        this->telemetry = new raTelemetryPayload( this->storage, RACONN_MAX_DATA, this->logger );
+    }
+#endif
+
+void ratatoskr::checkParam( void* ptr )
+{
+    if( ptr==NULL ) { 
+        this->logger->log( "ERROR: no storage set!" ); 
+    }
+}
+
+int ratatoskr::defineChannel( int deviceClass, int valueType, char * deviceName, long msgRateSec, double prepoctovyFaktor )
+{
+    char buffer[256];
+    sprintf( buffer, "%s|%f", deviceName, prepoctovyFaktor );
+    return this->defineChannel(  deviceClass,  valueType, buffer,  msgRateSec );
 }
 
 int ratatoskr::defineChannel( int deviceClass, int valueType, char * deviceName, long msgRateSec )
 {
-    int channel;
-    
-    channel = this->telemetry->defineChannel( deviceClass, valueType, deviceName, msgRateSec );
-    
-    return channel;
+    this->checkParam( this->telemetry );
+    return this->telemetry->defineChannel( deviceClass, valueType, deviceName, msgRateSec );
 }
 
 /**
@@ -27,6 +51,7 @@ int ratatoskr::defineChannel( int deviceClass, int valueType, char * deviceName,
  */
 int ratatoskr::postData( int channel, int priority, double value )
 {
+    this->checkParam( this->telemetry );
     return this->telemetry->send( channel, priority, value );
 }
 
@@ -35,19 +60,24 @@ int ratatoskr::postData( int channel, int priority, double value )
  */ 
 int ratatoskr::postImpulseData( int channel, int priority, long impulseTotalSum )
 {
+    this->checkParam( this->telemetry );
     return this->telemetry->sendImpulse( channel, priority, impulseTotalSum );
 }
 
 bool ratatoskr::hasData()
 {
+    this->checkParam( this->storage );
     return this->storage->hasData();
 }
 
 bool ratatoskr::process()
 {
+    this->checkParam( this->storage );
+
     bool necoPoslano = false;
     
     if( (millis() - this->lastErrTime) < RA_PAUSE_AFTER_ERR ) {
+        // this->logger->log( "err delay %d", millis() - this->lastErrTime );
         return false;
     }
     
@@ -70,7 +100,9 @@ bool ratatoskr::process()
         pos = 3;
         
         while( rec!=NULL ) {
+            //D/ this->logger->log( "%s pridavam zaznam #%d len=%d na pos=%d", this->identity, recs, rec->data_length, pos );
             if( pos + rec->data_length + 2 >= maxLen ) {
+                //D/ this->logger->log( "%s nepridavam, moc dat", this->identity );
                 break;
             }
             data[pos++] = rec->data_length;
@@ -93,16 +125,18 @@ bool ratatoskr::process()
             this->lastErrTime = millis();
             this->storage->undeleteAll();
         }
+    } else if( this->storage->hasData() ) {
+        this->logger->log( "??? ratatoskr E101");
     }
     return necoPoslano;
 }
 
-void ratatoskr::setAllDataPrepared()
+void ratatoskr::setAllDataPreparedFlag()
 {
     this->allDataPrepared = true;
 }
 
-void ratatoskr::clearAllDataPrepared()
+void ratatoskr::clearAllDataPreparedFlag()
 {
     this->allDataPrepared = false;
 }
@@ -112,11 +146,25 @@ bool ratatoskr::isAllDataPrepared()
     return this->allDataPrepared;
 }
 
-void ratatoskr::raDeepSleep( long usec )
+void ratatoskr::deepSleep( long usec )
 {
-    this->logger->log( "deep sleep for %d sec, uptime %d msec, time %d sec", (usec/1000000), millis(), time(NULL) );
+    this->logger->log( "deep sleep for %d s, uptime %d.%d s, time %d s", (usec/1000000), (millis()/1000), (millis()%1000)/100, time(NULL) );
     ra__DeepSleep( usec );
 }
+
+#ifdef ESP32
+void ratatoskr::lightSleep( long usec, bool logInfo )
+{
+    if (logInfo) {
+        this->logger->log( "light sleep for %d sec...", (usec/1000000));
+    } 
+    ra__LightSleep( usec );
+    if (logInfo) {
+        this->logger->log( "woke!" );
+    }
+}
+#endif
+
 
 int ratatoskr::sendBlob( unsigned char * blob, int blobSize, int startTime, char * desc, char * extension  )
 {

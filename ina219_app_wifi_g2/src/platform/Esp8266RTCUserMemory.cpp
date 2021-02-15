@@ -17,19 +17,19 @@
   
   bool readRtcData( struct rtcData * data )
   {
-      if (ESP.rtcUserMemoryRead(0, (uint32_t*) data, RTCDATA_SIZE )) {
-          uint32_t crcOfData = CRC32::calculate((const void*)(data->data), RTCDATA_PAYLOAD_SIZE );
-          if (crcOfData == data->crc32) {
-            return true;
-          }
+    if (ESP.rtcUserMemoryRead(0, (uint32_t*) data, RTCDATA_SIZE )) {
+      uint32_t crcOfData = CRC32::calculate((unsigned char*)(data->data), RTCDATA_PAYLOAD_SIZE );
+      if (crcOfData == data->crc32) {
+        return true;
       }
-      return false;
+    }
+    return false;
   }
   
   void saveRtcData( struct rtcData * data )
   {
-      data->crc32 = CRC32::calculate((const void*)(data->data), RTCDATA_PAYLOAD_SIZE );
-      ESP.rtcUserMemoryWrite(0, (uint32_t*) data, RTCDATA_SIZE );
+    data->crc32 = CRC32::calculate((unsigned char*)(data->data), RTCDATA_PAYLOAD_SIZE );
+    ESP.rtcUserMemoryWrite(0, (uint32_t*) data, RTCDATA_SIZE );
   }
   
 #endif  

@@ -79,7 +79,7 @@ class raTelemetryPayload {
     int maxPayloadSize;
     unsigned char* data;
     raLogger* logger;
-    char * identity = (char*)"TPLD";
+    char * identity = (char*)"TP";
     int impulseDataSessionId;
 
 };
